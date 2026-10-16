@@ -24,5 +24,12 @@ const base: AppData = {
     ...Array.from({length: 34}, (_, i) => ({ id: `e5-${i}`, goal_id: 'g5', author_id: 'm4', entry_date: daysFromNow(-i), amount: 1, note: 'Corrida do dia.', photo_path: null, created_at: daysFromNow(-i) }))
   ]
 }
-export function loadDemo(): AppData { try { const saved = localStorage.getItem('juntos-demo'); return saved ? { ...JSON.parse(saved), goals: JSON.parse(saved).goals.map((goal: { weekly_target?: number | null }) => ({ ...goal, weekly_target: goal.weekly_target ?? null })) } : base } catch { return base } }
+export function loadDemo(): AppData {
+  try {
+    const saved = localStorage.getItem('juntos-demo')
+    if (!saved) return base
+    const parsed = JSON.parse(saved) as AppData
+    return { ...parsed, goals: parsed.goals.map(goal => ({ ...goal, weekly_target: goal.weekly_target ?? null, fine_paid_at: goal.fine_paid_at ?? null })) }
+  } catch { return base }
+}
 export function saveDemo(data: AppData) { localStorage.setItem('juntos-demo', JSON.stringify(data)) }

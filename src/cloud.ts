@@ -33,8 +33,26 @@ export async function joinGroup(code: string) {
 }
 export async function addGoal(goal: Omit<Goal, 'id' | 'created_at'>) {
   if (!supabase) return
-  const { error } = await supabase.from('goals').insert(goal)
+  const { fine_paid_at: _finePaidAt, ...newGoal } = goal
+  void _finePaidAt
+  const { error } = await supabase.from('goals').insert(newGoal)
   if (error) throw error
+}
+export async function editGoal(goal: Goal) {
+  if (!supabase) return
+  const { error } = await supabase.from('goals').update({ title: goal.title, description: goal.description, category: goal.category, target_value: goal.target_value, weekly_target: goal.weekly_target, unit: goal.unit, deadline: goal.deadline, fine_amount: goal.fine_amount }).eq('id', goal.id).eq('owner_id', goal.owner_id).select('id').single()
+  if (error) throw error
+}
+export async function setFinePaid(goal: Goal, paid: boolean) {
+  if (!supabase) return
+  const { error } = await supabase.from('goals').update({ fine_paid_at: paid ? new Date().toISOString() : null }).eq('id', goal.id).eq('owner_id', goal.owner_id).select('id').single()
+  if (error) throw error
+}
+export async function removeEntry(entry: Entry) {
+  if (!supabase) return
+  const { error } = await supabase.from('entries').delete().eq('id', entry.id).eq('author_id', entry.author_id).select('id').single()
+  if (error) throw error
+  if (entry.photo_path) await supabase.storage.from('progress-photos').remove([entry.photo_path])
 }
 export async function addEntry(entry: Omit<Entry, 'id' | 'created_at'>, photo?: File) {
   if (!supabase) return
