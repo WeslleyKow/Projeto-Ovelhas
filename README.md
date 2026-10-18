@@ -32,7 +32,7 @@ No projeto Supabase, aplique as migrações **na ordem**:
 1. [Estrutura inicial](supabase/migrations/20261016000000_initial.sql): grupos, contas, metas, registros, regras de acesso e fotos privadas. **Já aplicada** ao projeto Projeto-Ovelhas em 16/10/2026.
 2. [Controles de metas e multas](supabase/migrations/20261016000001_goal_controls.sql): edição de metas, exclusão de registros, multas pagas e proteção do prazo. **Já aplicada** ao projeto Projeto-Ovelhas em 18/10/2026.
 
-Configure `VITE_SUPABASE_URL` com a URL do projeto e `VITE_SUPABASE_ANON_KEY` com a chave pública *publishable* (ou *anon*) no ambiente de desenvolvimento e na hospedagem. Veja [.env.example](.env.example). **Nunca use `service_role` ou uma chave secreta no site.**
+Configure `VITE_SUPABASE_URL` com a URL base do projeto (por exemplo, `https://SEU-PROJETO.supabase.co`, sem `/rest/v1/`) e `VITE_SUPABASE_ANON_KEY` com a chave pública *publishable* (ou *anon*) no ambiente de desenvolvimento e na hospedagem. O app também remove um sufixo `/rest/v1/` caso a variável já tenha sido preenchida assim. Veja [.env.example](.env.example). **Nunca use `service_role` ou uma chave secreta no site.**
 
 O provedor Email está habilitado. A confirmação por e-mail está desativada para permitir o cadastro dos familiares sem um servidor SMTP próprio; cada pessoa pode entrar logo após criar a conta. O acesso aos dados continua protegido por login, código de convite e regras de acesso do banco. A *Site URL* em **Authentication → URL Configuration** está configurada como `https://projeto-ovelhas.pages.dev`.
 

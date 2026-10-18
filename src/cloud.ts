@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { type AppData, colors, type Entry, type Goal, type Group, type Member } from './types'
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const url = configuredUrl?.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 export const cloudEnabled = Boolean(url && key)
 export const supabase = cloudEnabled ? createClient(url!, key!) : null
