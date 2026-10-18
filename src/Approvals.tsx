@@ -1,23 +1,10 @@
-import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
-import { Check, Copy, RefreshCw, X } from 'lucide-react'
-import { type AppData, type Goal, type GoalChangeRequest, formatDate, money } from './types'
+import { Check, RefreshCw, X } from 'lucide-react'
+import { type AppData, type Goal, type GoalChangeRequest, type Group, formatDate, money } from './types'
 
-export function ruleText(goal: Pick<Goal, 'approval_mode' | 'approval_value'>, others: number) {
+export function ruleText(group: Pick<Group, 'approval_mode' | 'approval_value'>, others: number) {
   if (!others) return 'Sem outros participantes: aplicação imediata'
-  if (goal.approval_mode === 'percent') return `${goal.approval_value}% dos demais participantes`
-  return `${goal.approval_value} ${goal.approval_value === 1 ? 'aprovação' : 'aprovações'} dos demais participantes`
-}
-
-export function PixPanel({ code }: { code: string }) {
-  const [image, setImage] = useState('')
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    let alive = true
-    QRCode.toDataURL(code, { width: 220, margin: 2 }).then(result => { if (alive) setImage(result) }).catch(() => { if (alive) setImage('') })
-    return () => { alive = false }
-  }, [code])
-  return <div className="pix-panel"><strong>QR Code Pix da multa</strong>{image && <img src={image} alt="QR Code Pix para pagamento da multa"/>}<p>Confira o destinatário no seu aplicativo bancário antes de pagar.</p><div className="pix-copy"><code>{code}</code><button type="button" onClick={async () => { try { await navigator.clipboard.writeText(code); setCopied(true) } catch { setCopied(false) } }}><Copy size={14}/>{copied ? 'Copiado' : 'Copiar'}</button></div></div>
+  if (group.approval_mode === 'percent') return `${group.approval_value}% dos demais participantes`
+  return `${group.approval_value} ${group.approval_value === 1 ? 'aprovação' : 'aprovações'} dos demais participantes`
 }
 
 function changeSummary(request: GoalChangeRequest, goal?: Goal) {
@@ -32,8 +19,6 @@ function changeSummary(request: GoalChangeRequest, goal?: Goal) {
   if (next.weekly_target !== goal.weekly_target) changes.push(`Frequência: ${goal.weekly_target ?? 'sem meta'} → ${next.weekly_target ?? 'sem meta'} dias/semana`)
   if (next.deadline !== goal.deadline) changes.push(`Prazo: ${formatDate(goal.deadline)} → ${formatDate(next.deadline)}`)
   if (Number(next.fine_amount) !== Number(goal.fine_amount)) changes.push(`Multa: ${money(Number(goal.fine_amount))} → ${money(Number(next.fine_amount))}`)
-  if (next.approval_mode !== goal.approval_mode || next.approval_value !== goal.approval_value) changes.push(`Regra: ${next.approval_mode === 'percent' ? `${next.approval_value}%` : `${next.approval_value} aprovação(ões)`}`)
-  if ((next.pix_code || null) !== (goal.pix_code || null)) changes.push('Código Pix alterado')
   return changes.length ? changes : ['Nenhum campo alterado']
 }
 

@@ -1,7 +1,7 @@
 export type Member = { id: string; name: string; color: string }
-export type Group = { id: string; name: string; invite_code: string }
 export type ApprovalMode = 'count' | 'percent'
-export type GoalProposal = { title: string; description: string; category: string; target_value: number; weekly_target: number | null; unit: string; deadline: string; fine_amount: number; approval_mode: ApprovalMode; approval_value: number; pix_code: string | null }
+export type Group = { id: string; name: string; invite_code: string; created_by: string; approval_mode: ApprovalMode; approval_value: number; pix_qr_path: string | null }
+export type GoalProposal = { title: string; description: string; category: string; target_value: number; weekly_target: number | null; unit: string; deadline: string; fine_amount: number }
 export type Goal = GoalProposal & { id: string; group_id: string; owner_id: string; fine_paid_at?: string | null; deleted_at: string | null; created_at: string }
 export type Entry = { id: string; goal_id: string; author_id: string; entry_date: string; amount: number; note: string; photo_path: string | null; created_at: string }
 export type GoalChangeRequest = { id: string; goal_id: string; group_id: string; owner_id: string; goal_title: string; action: 'edit' | 'delete'; proposed: GoalProposal | null; eligible_user_ids: string[]; required_approvals: number; status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'; created_at: string; resolved_at: string | null }
@@ -16,7 +16,7 @@ export const completed = (goal: Goal, entries: Entry[]) => entries.filter(entry 
 export const progress = (goal: Goal, entries: Entry[]) => Math.min(100, Math.floor(completed(goal, entries) / Number(goal.target_value) * 100))
 export const fineIsDue = (goal: Goal, entries: Entry[]) => goal.deadline < today() && progress(goal, entries) < 100
 export const unpaidFine = (goal: Goal, entries: Entry[]) => fineIsDue(goal, entries) && !goal.fine_paid_at
-export const approvalCount = (goal: Goal, otherMembers: number) => otherMembers === 0 ? 0 : goal.approval_mode === 'percent' ? Math.ceil(otherMembers * goal.approval_value / 100) : goal.approval_value
+export const approvalCount = (group: Group, otherMembers: number) => otherMembers === 0 ? 0 : group.approval_mode === 'percent' ? Math.ceil(otherMembers * group.approval_value / 100) : group.approval_value
 export const daysSince = (date: string) => Math.max(0, Math.floor((new Date(`${today()}T12:00:00`).getTime() - new Date(`${date}T12:00:00`).getTime()) / 86400000))
 export const weekCount = (goal: Goal, entries: Entry[]) => { const now = new Date(`${today()}T12:00:00`); const weekday = (now.getDay() + 6) % 7; now.setDate(now.getDate() - weekday); const start = now.toLocaleDateString('en-CA'); return new Set(entries.filter(entry => entry.goal_id === goal.id && entry.entry_date >= start && entry.entry_date <= goal.deadline).map(entry => entry.entry_date)).size }
 

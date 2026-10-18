@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { type AppData, colors, type Entry, type Goal, type GoalChangeRequest, type GoalChangeVote, type GoalProposal, type Group, type Member } from './types'
+import { type AppData, type ApprovalMode, colors, type Entry, type Goal, type GoalChangeRequest, type GoalChangeVote, type GoalProposal, type Group, type Member } from './types'
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const url = configuredUrl?.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -35,6 +35,33 @@ export async function joinGroup(code: string) {
   if (!supabase) return
   const { error } = await supabase.rpc('join_family_group', { code: code.trim().toUpperCase() })
   if (error) throw error
+}
+export async function saveGroupRule(group: Group, mode: ApprovalMode, value: number) {
+  if (!supabase) return
+  const { error } = await supabase.rpc('set_group_approval_rule', { target_group: group.id, new_mode: mode, new_value: value })
+  if (error) throw error
+}
+export async function uploadGroupPix(group: Group, file: File) {
+  if (!supabase) return
+  const extensions: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }
+  if (!extensions[file.type] || file.size > 5 * 1024 * 1024) throw new Error('Escolha uma imagem PNG, JPG, WebP ou GIF de até 5 MB.')
+  const path = `${group.id}/${group.created_by}/${crypto.randomUUID()}.${extensions[file.type]}`
+  const uploaded = await supabase.storage.from('group-pix').upload(path, file, { contentType: file.type })
+  if (uploaded.error) throw uploaded.error
+  const { error } = await supabase.rpc('set_group_pix_qr', { target_group: group.id, new_path: path })
+  if (error) { await supabase.storage.from('group-pix').remove([path]); throw error }
+  if (group.pix_qr_path) await supabase.storage.from('group-pix').remove([group.pix_qr_path])
+}
+export async function removeGroupPix(group: Group) {
+  if (!supabase) return
+  const { error } = await supabase.rpc('set_group_pix_qr', { target_group: group.id, new_path: null })
+  if (error) throw error
+  if (group.pix_qr_path) await supabase.storage.from('group-pix').remove([group.pix_qr_path])
+}
+export async function groupPixUrl(path: string): Promise<string | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.storage.from('group-pix').createSignedUrl(path, 3600)
+  return error ? null : data.signedUrl
 }
 export async function addGoal(goal: Omit<Goal, 'id' | 'created_at'>) {
   if (!supabase) return

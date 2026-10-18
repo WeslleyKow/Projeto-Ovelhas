@@ -10,7 +10,7 @@ export function requestDemoChange(data: AppData, goal: Goal, action: 'edit' | 'd
   if (data.requests.some(request => request.goal_id === goal.id && request.status === 'pending')) throw new Error('Já existe um pedido pendente para este objetivo.')
   if (action === 'edit' && goal.deadline < today()) throw new Error('O prazo do objetivo já terminou.')
   const eligible = data.members.filter(member => member.id !== goal.owner_id).map(member => member.id)
-  const required = approvalCount(goal, eligible.length)
+  const required = approvalCount(data.group, eligible.length)
   if (required > eligible.length) throw new Error('A regra exige mais aprovações do que participantes disponíveis.')
   const request: GoalChangeRequest = { id: crypto.randomUUID(), goal_id: goal.id, group_id: goal.group_id, owner_id: goal.owner_id, goal_title: goal.title, action, proposed, eligible_user_ids: eligible, required_approvals: required, status: required ? 'pending' : 'approved', created_at: new Date().toISOString(), resolved_at: required ? null : new Date().toISOString() }
   const next = { ...data, requests: [request, ...data.requests] }
