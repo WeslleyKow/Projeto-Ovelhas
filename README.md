@@ -34,17 +34,21 @@ No projeto Supabase, aplique as migrações **na ordem**:
 
 Configure `VITE_SUPABASE_URL` com a URL do projeto e `VITE_SUPABASE_ANON_KEY` com a chave pública *publishable* (ou *anon*) no ambiente de desenvolvimento e na hospedagem. Veja [.env.example](.env.example). **Nunca use `service_role` ou uma chave secreta no site.**
 
-O provedor Email está habilitado e a confirmação por e-mail está ativa: cada pessoa precisa confirmar o cadastro. Em **Authentication → URL Configuration**, defina a URL publicada do site como *Site URL* após a publicação; no momento, o projeto ainda usa `http://localhost:3000`.
+O provedor Email está habilitado. A confirmação por e-mail está desativada para permitir o cadastro dos familiares sem um servidor SMTP próprio; cada pessoa pode entrar logo após criar a conta. O acesso aos dados continua protegido por login, código de convite e regras de acesso do banco. A *Site URL* em **Authentication → URL Configuration** está configurada como `https://projeto-ovelhas.pages.dev`.
 
 A primeira pessoa cria um grupo e compartilha o código de convite. As demais criam conta e entram com o código. Cada pessoa altera apenas as próprias metas e registros; integrantes do mesmo grupo podem visualizá-los. Fotos ficam em um bucket privado e são exibidas por URLs temporárias.
 
 ## Hospedagem gratuita: Cloudflare Pages
 
-O site pode ficar no plano gratuito do Cloudflare Pages, com Supabase gratuito para contas e dados. O código está na branch `main` de `WeslleyKow/Projeto-Ovelhas`. Ao conectar o repositório GitHub no Cloudflare Pages, use:
+O site está publicado em **https://projeto-ovelhas.pages.dev** no plano gratuito do Cloudflare Pages, com Supabase gratuito para contas e dados. O código está na branch `main` de `WeslleyKow/Projeto-Ovelhas`. O projeto Pages foi criado como `projeto-ovelhas` e publicado por envio direto da pasta `dist` com Wrangler. Ele ainda não está conectado ao GitHub; mudanças futuras exigem uma nova compilação e publicação.
+
+Para publicar uma alteração, com `CLOUDFLARE_API_TOKEN`, `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` disponíveis no ambiente, execute `npm run build` e depois `CLOUDFLARE_ACCOUNT_ID=<ID_DA_CONTA> npx wrangler@4 pages deploy dist --project-name=projeto-ovelhas --branch=main`. Essas duas variáveis `VITE_` são públicas e entram nos arquivos do site durante a compilação; nunca coloque uma chave `service_role` no frontend.
+
+Se futuramente conectar o repositório GitHub ao Cloudflare Pages, use:
 
 - **Framework preset:** Vite
 - **Build command:** `npm run build`
 - **Build output directory:** `dist`
 - **Environment variables:** `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` em produção e prévias
 
-Após o deploy, configure a URL `*.pages.dev` recebida como *Site URL* no Supabase e teste cadastro, convite, registro com foto, ranking e multa paga usando duas contas. O domínio exato e o teste da versão publicada ainda dependem da publicação no Pages. Os limites e políticas dos planos gratuitos podem mudar.
+A publicação e a configuração da *Site URL* foram concluídas. O teste de ponta a ponta com duas contas, foto, ranking e multa paga ainda depende de uso no navegador: o ambiente de execução do Codex não consegue abrir diretamente os domínios `pages.dev` e `supabase.co`, embora as APIs de administração tenham confirmado o deploy e as configurações. Os limites e políticas dos planos gratuitos podem mudar.
