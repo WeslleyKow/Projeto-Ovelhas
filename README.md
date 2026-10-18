@@ -30,11 +30,11 @@ O teste de navegador usa Chromium em `/usr/bin/chromium`; defina `CHROMIUM_PATH`
 No projeto Supabase, aplique as migrações **na ordem**:
 
 1. [Estrutura inicial](supabase/migrations/20261016000000_initial.sql): grupos, contas, metas, registros, regras de acesso e fotos privadas. **Já aplicada** ao projeto Projeto-Ovelhas em 16/10/2026.
-2. [Controles de metas e multas](supabase/migrations/20261016000001_goal_controls.sql): edição de metas, exclusão de registros, multas pagas e proteção do prazo. **Ainda não aplicada** ao projeto remoto. Aplique-a antes de usar essas funções na versão compartilhada.
+2. [Controles de metas e multas](supabase/migrations/20261016000001_goal_controls.sql): edição de metas, exclusão de registros, multas pagas e proteção do prazo. **Já aplicada** ao projeto Projeto-Ovelhas em 18/10/2026.
 
 Configure `VITE_SUPABASE_URL` com a URL do projeto e `VITE_SUPABASE_ANON_KEY` com a chave pública *publishable* (ou *anon*) no ambiente de desenvolvimento e na hospedagem. Veja [.env.example](.env.example). **Nunca use `service_role` ou uma chave secreta no site.**
 
-Em **Authentication → Providers**, habilite Email. Se a confirmação por e-mail estiver ativa, cada pessoa precisa confirmar o cadastro. Em **Authentication → URL Configuration**, defina a URL publicada do site como *Site URL* após a publicação.
+O provedor Email está habilitado e a confirmação por e-mail está ativa: cada pessoa precisa confirmar o cadastro. Em **Authentication → URL Configuration**, defina a URL publicada do site como *Site URL* após a publicação; no momento, o projeto ainda usa `http://localhost:3000`.
 
 A primeira pessoa cria um grupo e compartilha o código de convite. As demais criam conta e entram com o código. Cada pessoa altera apenas as próprias metas e registros; integrantes do mesmo grupo podem visualizá-los. Fotos ficam em um bucket privado e são exibidas por URLs temporárias.
 

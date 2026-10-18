@@ -1,4 +1,4 @@
--- Aplicar APÓS 20261016000000_initial.sql. Ainda não aplicada ao projeto remoto.
+-- Aplicar APÓS 20261016000000_initial.sql. Aplicada ao projeto Projeto-Ovelhas em 18/10/2026.
 alter table public.goals add column if not exists fine_paid_at timestamptz;
 
 drop policy if exists "edit own active goal" on public.goals;
