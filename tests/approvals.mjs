@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict'
+import { chromium } from 'playwright'
+
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] })
+const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+const errors = []
+page.on('pageerror', error => errors.push(error.message))
+page.on('dialog', dialog => dialog.accept())
+const base = `http://127.0.0.1:${process.env.SMOKE_PORT || '4173'}/`
+
+async function voteAs(name) {
+  await page.getByLabel('Testar como participante').selectOption({ label: name })
+  await page.getByRole('button', { name: 'Autorizar' }).click()
+}
+
+try {
+  await page.goto(base)
+  await page.getByRole('button', { name: 'Explorar demonstração' }).click()
+  await page.getByRole('button', { name: 'Novo objetivo' }).click()
+  await page.getByPlaceholder('Ex.: Ir à academia 20 vezes').fill('Projeto com votação')
+  await page.getByPlaceholder('Ex.: 20').fill('10')
+  await page.getByPlaceholder('treinos, km, horas...').fill('etapas')
+  const deadline = new Date(); deadline.setDate(deadline.getDate() + 30)
+  await page.locator('input[type="date"]').fill(deadline.toLocaleDateString('en-CA'))
+  await page.getByPlaceholder('0,00').fill('25')
+  await page.getByPlaceholder('Cole aqui o código Pix; o QR Code será gerado automaticamente').fill('PIX-DEMO-123')
+  await page.getByLabel('Tipo').selectOption('percent')
+  await page.getByLabel('Porcentagem necessária').fill('50')
+  await page.getByRole('button', { name: 'Criar objetivo' }).click()
+  await page.getByRole('button', { name: /Projeto com votação/ }).click()
+  await page.getByAltText('QR Code Pix para pagamento da multa').waitFor()
+  await page.getByRole('button', { name: 'Pedir edição' }).click()
+  await page.getByPlaceholder('Ex.: Ir à academia 20 vezes').fill('Projeto aprovado')
+  await page.getByRole('button', { name: 'Enviar pedido' }).click()
+  await page.getByRole('heading', { level: 1, name: 'Projeto com votação' }).waitFor()
+  await page.getByText('0/2 aprovações').waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Autorizar' }).count(), 0, 'owner cannot approve own request')
+  await page.getByRole('button', { name: 'Voltar aos objetivos' }).click()
+  await page.getByRole('button', { name: 'Minha família' }).first().click()
+  await voteAs('Marina')
+  await page.getByText('1/2 aprovações').waitFor()
+  await voteAs('Rafael')
+  await page.getByText('Nenhum pedido pendente').waitFor()
+  await page.getByLabel('Testar como participante').selectOption({ label: 'Você' })
+  await page.getByRole('button', { name: 'Objetivos' }).first().click()
+  await page.getByRole('button', { name: /Projeto aprovado/ }).click()
+  await page.getByRole('button', { name: 'Pedir exclusão' }).click()
+  await page.getByText('PEDIDO DE EXCLUSÃO', { exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Voltar aos objetivos' }).click()
+  await page.getByRole('button', { name: 'Minha família' }).first().click()
+  await voteAs('Marina')
+  await voteAs('Rafael')
+  await page.getByLabel('Testar como participante').selectOption({ label: 'Você' })
+  await page.getByRole('button', { name: 'Objetivos' }).first().click()
+  assert.equal(await page.getByRole('button', { name: /Projeto aprovado/ }).count(), 0, 'approved deletion removes the goal')
+  assert.deepEqual(errors, [])
+  console.log('Approval flow passed: Pix QR, 50% quorum, owner exclusion, edit and deletion')
+} finally { await browser.close() }

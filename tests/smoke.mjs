@@ -7,7 +7,7 @@ const errors = []
 page.on('pageerror', error => errors.push(error.message))
 page.on('dialog', dialog => dialog.accept())
 async function enterDemo(tab) {
-  await tab.goto('http://127.0.0.1:4173/', { waitUntil: 'networkidle' })
+  await tab.goto(`http://127.0.0.1:${process.env.SMOKE_PORT || '4173'}/`, { waitUntil: 'networkidle' })
   if (await tab.getByRole('button', { name: 'Explorar demonstração' }).isVisible().catch(() => false)) await tab.getByRole('button', { name: 'Explorar demonstração' }).click()
 }
 try {
@@ -16,7 +16,7 @@ try {
   await page.getByRole('button', { name: 'Novo objetivo' }).click()
   await page.getByPlaceholder('Ex.: Ir à academia 20 vezes').fill('Ler 4 artigos')
   await page.getByPlaceholder('O que você pretende fazer?').fill('Um artigo novo por semana.')
-  await page.locator('select').selectOption('Leitura')
+  await page.locator('select').first().selectOption('Leitura')
   const deadline = new Date(); deadline.setDate(deadline.getDate() + 30)
   await page.locator('input[type="date"]').fill(deadline.toLocaleDateString('en-CA'))
   await page.getByPlaceholder('Ex.: 20').fill('4')
@@ -25,10 +25,6 @@ try {
   await page.getByPlaceholder('0,00').fill('15')
   await page.getByRole('button', { name: 'Criar objetivo' }).click()
   await page.getByRole('button', { name: /Ler 4 artigos/ }).click()
-  await page.getByRole('button', { name: 'Editar objetivo' }).click()
-  await page.getByPlaceholder('Ex.: Ir à academia 20 vezes').fill('Ler quatro artigos')
-  await page.getByRole('button', { name: 'Salvar alterações' }).click()
-  await page.getByRole('heading', { name: 'Ler quatro artigos' }).waitFor()
   await page.getByRole('button', { name: 'Registrar progresso' }).click()
   await page.getByPlaceholder('Conte como foi seu dia, uma pequena vitória ou algo que aprendeu...').fill('Li sobre ciência.')
   await page.locator('input[type="file"]').setInputFiles({ name: 'progresso.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==', 'base64') })
@@ -38,10 +34,10 @@ try {
   await page.getByRole('button', { name: 'Excluir registro' }).click()
   await page.getByText('Li sobre ciência.').waitFor({ state: 'detached' })
   await page.getByText('0 / 4 artigos').waitFor()
-  await page.evaluate(() => { const data = JSON.parse(localStorage.getItem('juntos-demo')); const goal = data.goals.find(goal => goal.title === 'Ler quatro artigos'); const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); goal.deadline = yesterday.toLocaleDateString('en-CA'); localStorage.setItem('juntos-demo', JSON.stringify(data)) })
+  await page.evaluate(() => { const data = JSON.parse(localStorage.getItem('juntos-demo')); const goal = data.goals.find(goal => goal.title === 'Ler 4 artigos'); const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); goal.deadline = yesterday.toLocaleDateString('en-CA'); localStorage.setItem('juntos-demo', JSON.stringify(data)) })
   await enterDemo(page)
   await page.getByRole('button', { name: 'Objetivos' }).first().click()
-  await page.getByRole('button', { name: /Ler quatro artigos/ }).click()
+  await page.getByRole('button', { name: /Ler 4 artigos/ }).click()
   await page.getByRole('button', { name: 'Marcar como paga' }).click()
   await page.getByText('Pagamento marcado como feito').waitFor()
   await page.getByRole('button', { name: 'Desfazer pagamento' }).click()
@@ -63,5 +59,5 @@ try {
   await mobile.waitForTimeout(300)
   assert.ok(await mobile.locator('.sidebar').evaluate(node => node.getBoundingClientRect().right <= 0))
   assert.deepEqual(errors, [])
-  console.log('Smoke test passed: goal edit, photo log, delete, fine settlement, persistence, ranking, family, mobile')
+  console.log('Smoke test passed: photo log, delete, fine settlement, persistence, ranking, family, mobile')
 } finally { await browser.close() }

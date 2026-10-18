@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { type AppData, colors, type Entry, type Goal, type Group, type Member } from './types'
+import { type AppData, colors, type Entry, type Goal, type GoalChangeRequest, type GoalChangeVote, type GoalProposal, type Group, type Member } from './types'
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const url = configuredUrl?.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -11,16 +11,20 @@ export async function fetchData(userId: string): Promise<AppData | null> {
   if (membershipError) throw membershipError
   if (!memberships?.length) return null
   const groupId = memberships[0].group_id as string
-  const [groupResult, membersResult, goalsResult, entriesResult] = await Promise.all([
+  const [groupResult, membersResult, goalsResult, entriesResult, requestsResult] = await Promise.all([
     supabase.from('groups').select('*').eq('id', groupId).single(),
     supabase.from('group_members').select('user_id, profiles(display_name)').eq('group_id', groupId),
     supabase.from('goals').select('*').eq('group_id', groupId).order('created_at', { ascending: false }),
-    supabase.from('entries').select('*, goals!inner(group_id)').eq('goals.group_id', groupId).order('entry_date', { ascending: false })
+    supabase.from('entries').select('*, goals!inner(group_id)').eq('goals.group_id', groupId).order('entry_date', { ascending: false }),
+    supabase.from('goal_change_requests').select('*').eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: false })
   ])
-  for (const result of [groupResult, membersResult, goalsResult, entriesResult]) if (result.error) throw result.error
+  for (const result of [groupResult, membersResult, goalsResult, entriesResult, requestsResult]) if (result.error) throw result.error
+  const requests = (requestsResult.data ?? []) as GoalChangeRequest[]
+  const votesResult = requests.length ? await supabase.from('goal_change_votes').select('*').in('request_id', requests.map(request => request.id)) : null
+  if (votesResult?.error) throw votesResult.error
   const members: Member[] = (membersResult.data ?? []).map((row, i) => ({ id: row.user_id, name: (row.profiles as unknown as {display_name: string} | null)?.display_name ?? 'Participante', color: colors[i % colors.length] }))
   const entries: Entry[] = (entriesResult.data ?? []).map(row => ({ id: row.id, goal_id: row.goal_id, author_id: row.author_id, entry_date: row.entry_date, amount: Number(row.amount), note: row.note, photo_path: row.photo_path, created_at: row.created_at }))
-  return { group: groupResult.data as Group, members, goals: goalsResult.data as Goal[], entries, me: userId }
+  return { group: groupResult.data as Group, members, goals: goalsResult.data as Goal[], entries, requests, votes: (votesResult?.data ?? []) as GoalChangeVote[], me: userId }
 }
 export async function createGroup(name: string) {
   if (!supabase) return
@@ -39,14 +43,24 @@ export async function addGoal(goal: Omit<Goal, 'id' | 'created_at'>) {
   const { error } = await supabase.from('goals').insert(newGoal)
   if (error) throw error
 }
-export async function editGoal(goal: Goal) {
+export async function requestGoalChange(goal: Goal, action: 'edit' | 'delete', proposal?: GoalProposal) {
   if (!supabase) return
-  const { error } = await supabase.from('goals').update({ title: goal.title, description: goal.description, category: goal.category, target_value: goal.target_value, weekly_target: goal.weekly_target, unit: goal.unit, deadline: goal.deadline, fine_amount: goal.fine_amount }).eq('id', goal.id).eq('owner_id', goal.owner_id).select('id').single()
+  const { error } = await supabase.rpc('request_goal_change', { target_goal: goal.id, change_action: action, proposed_goal: proposal ?? null })
+  if (error) throw error
+}
+export async function voteGoalChange(id: string, approved: boolean) {
+  if (!supabase) return
+  const { error } = await supabase.rpc('vote_goal_change', { target_request: id, allow_change: approved })
+  if (error) throw error
+}
+export async function cancelGoalChange(id: string) {
+  if (!supabase) return
+  const { error } = await supabase.rpc('cancel_goal_change', { target_request: id })
   if (error) throw error
 }
 export async function setFinePaid(goal: Goal, paid: boolean) {
   if (!supabase) return
-  const { error } = await supabase.from('goals').update({ fine_paid_at: paid ? new Date().toISOString() : null }).eq('id', goal.id).eq('owner_id', goal.owner_id).select('id').single()
+  const { error } = await supabase.rpc('set_goal_fine_paid', { target_goal: goal.id, paid })
   if (error) throw error
 }
 export async function removeEntry(entry: Entry) {
