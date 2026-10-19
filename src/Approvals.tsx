@@ -1,5 +1,6 @@
 import { Check, RefreshCw, X } from 'lucide-react'
 import { type AppData, type Goal, type GoalChangeRequest, type Group, formatDate, money } from './types'
+import { recurrenceLabel } from './recurrence'
 
 export function ruleText(group: Pick<Group, 'approval_mode' | 'approval_value'>, others: number) {
   if (!others) return 'Sem outros participantes: aplicação imediata'
@@ -16,9 +17,10 @@ function changeSummary(request: GoalChangeRequest, goal?: Goal) {
   if (next.description !== goal.description) changes.push('Descrição alterada')
   if (next.category !== goal.category) changes.push(`Categoria: ${goal.category} → ${next.category}`)
   if (Number(next.target_value) !== Number(goal.target_value) || next.unit !== goal.unit) changes.push(`Meta: ${goal.target_value} ${goal.unit} → ${next.target_value} ${next.unit}`)
-  if (next.weekly_target !== goal.weekly_target) changes.push(`Frequência: ${goal.weekly_target ?? 'sem meta'} → ${next.weekly_target ?? 'sem meta'} dias/semana`)
+  if (next.recurrence_type === 'none' && goal.recurrence_type === 'none' && next.weekly_target !== goal.weekly_target) changes.push(`Frequência: ${goal.weekly_target ?? 'sem meta'} → ${next.weekly_target ?? 'sem meta'} dias/semana`)
   if (next.deadline !== goal.deadline) changes.push(`Prazo: ${formatDate(goal.deadline)} → ${formatDate(next.deadline)}`)
   if (Number(next.fine_amount) !== Number(goal.fine_amount)) changes.push(`Multa: ${money(Number(goal.fine_amount))} → ${money(Number(next.fine_amount))}`)
+  if (next.recurrence_type !== goal.recurrence_type || next.start_date !== goal.start_date || (next.recurrence_type !== 'none' && next.weekly_target !== goal.weekly_target)) changes.push(`Recorrência: ${recurrenceLabel(goal)} → ${recurrenceLabel({ ...goal, ...next })}`)
   return changes.length ? changes : ['Nenhum campo alterado']
 }
 

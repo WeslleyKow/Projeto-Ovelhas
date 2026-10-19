@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { type AppData, type ApprovalMode, colors, type Entry, type Goal, type GoalChangeRequest, type GoalChangeVote, type GoalProposal, type Group, type Member } from './types'
+import { type AppData, type ApprovalMode, colors, type Entry, type Goal, type GoalChangeRequest, type GoalChangeVote, type GoalProposal, type Group, type Member, type RecurringFinePayment } from './types'
 const configuredUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const url = configuredUrl?.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -11,20 +11,21 @@ export async function fetchData(userId: string): Promise<AppData | null> {
   if (membershipError) throw membershipError
   if (!memberships?.length) return null
   const groupId = memberships[0].group_id as string
-  const [groupResult, membersResult, goalsResult, entriesResult, requestsResult] = await Promise.all([
+  const [groupResult, membersResult, goalsResult, entriesResult, requestsResult, finesResult] = await Promise.all([
     supabase.from('groups').select('*').eq('id', groupId).single(),
     supabase.from('group_members').select('user_id, profiles(display_name)').eq('group_id', groupId),
     supabase.from('goals').select('*').eq('group_id', groupId).order('created_at', { ascending: false }),
     supabase.from('entries').select('*, goals!inner(group_id)').eq('goals.group_id', groupId).order('entry_date', { ascending: false }),
-    supabase.from('goal_change_requests').select('*').eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: false })
+    supabase.from('goal_change_requests').select('*').eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: false }),
+    supabase.from('recurring_fine_payments').select('goal_id,period_start,occurrence_index,paid_at').eq('group_id', groupId)
   ])
-  for (const result of [groupResult, membersResult, goalsResult, entriesResult, requestsResult]) if (result.error) throw result.error
+  for (const result of [groupResult, membersResult, goalsResult, entriesResult, requestsResult, finesResult]) if (result.error) throw result.error
   const requests = (requestsResult.data ?? []) as GoalChangeRequest[]
   const votesResult = requests.length ? await supabase.from('goal_change_votes').select('*').in('request_id', requests.map(request => request.id)) : null
   if (votesResult?.error) throw votesResult.error
   const members: Member[] = (membersResult.data ?? []).map((row, i) => ({ id: row.user_id, name: (row.profiles as unknown as {display_name: string} | null)?.display_name ?? 'Participante', color: colors[i % colors.length] }))
   const entries: Entry[] = (entriesResult.data ?? []).map(row => ({ id: row.id, goal_id: row.goal_id, author_id: row.author_id, entry_date: row.entry_date, amount: Number(row.amount), note: row.note, photo_path: row.photo_path, created_at: row.created_at }))
-  return { group: groupResult.data as Group, members, goals: goalsResult.data as Goal[], entries, requests, votes: (votesResult?.data ?? []) as GoalChangeVote[], me: userId }
+  return { group: groupResult.data as Group, members, goals: goalsResult.data as Goal[], entries, finePayments: (finesResult.data ?? []) as RecurringFinePayment[], requests, votes: (votesResult?.data ?? []) as GoalChangeVote[], me: userId }
 }
 export async function createGroup(name: string) {
   if (!supabase) return
@@ -88,6 +89,11 @@ export async function cancelGoalChange(id: string) {
 export async function setFinePaid(goal: Goal, paid: boolean) {
   if (!supabase) return
   const { error } = await supabase.rpc('set_goal_fine_paid', { target_goal: goal.id, paid })
+  if (error) throw error
+}
+export async function setRecurringFinePaid(goal: Goal, periodStart: string, occurrenceIndex: number, paid: boolean) {
+  if (!supabase) return
+  const { error } = await supabase.rpc('set_recurring_fine_paid', { target_goal: goal.id, target_period: periodStart, target_occurrence: occurrenceIndex, paid })
   if (error) throw error
 }
 export async function removeEntry(entry: Entry) {

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
-import ts from 'typescript'
+import { build } from 'esbuild'
 
-const source = await readFile(new URL('../src/types.ts', import.meta.url), 'utf8')
-const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
-const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+async function loadModule(path) {
+  const result = await build({ entryPoints: [new URL(path, import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false })
+  return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
+}
+const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
+const { recurringPeriods, recurringProgress, recurringFines } = await loadModule('../src/recurrence.ts')
 const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
@@ -27,4 +29,24 @@ assert.equal(weekCount(currentGoal, [
 assert.equal(approvalCount({ approval_mode: 'percent', approval_value: 50 }, 3), 2, 'percentage quorum rounds up')
 assert.equal(approvalCount({ approval_mode: 'count', approval_value: 2 }, 3), 2, 'absolute quorum uses the configured count')
 assert.equal(approvalCount({ approval_mode: 'count', approval_value: 1 }, 0), 0, 'solo group applies immediately')
-console.log('Business rules passed: deadline, progress, fine, weekly cadence, approval quorum')
+const recurring = { ...goal, recurrence_type: 'daily', start_date: '2026-10-17', deadline: '2026-10-19', target_value: 4 }
+const dailyLogs = [
+  { goal_id: 'goal', entry_date: '2026-10-17', amount: 2 },
+  { goal_id: 'goal', entry_date: '2026-10-17', amount: 2 },
+  { goal_id: 'goal', entry_date: '2026-10-18', amount: 3 }
+]
+assert.deepEqual(recurringPeriods(recurring, dailyLogs, '2026-10-19').map(p => [p.achieved, p.missed]), [[1, 0], [0, 1], [0, 0]], 'daily goals require the full amount on each date')
+assert.equal(recurringProgress(recurring, dailyLogs, '2026-10-19').percent, 33)
+assert.equal(recurringFines(recurring, dailyLogs, [], '2026-10-19').length, 1)
+assert.equal(recurringFines(recurring, dailyLogs, [{ goal_id: 'goal', period_start: '2026-10-18', occurrence_index: 1 }], '2026-10-19')[0].paid, true)
+const weekly = { ...recurring, recurrence_type: 'weekly', start_date: '2026-10-12', deadline: '2026-10-18', weekly_target: 5 }
+const weeklyLogs = ['2026-10-12', '2026-10-13', '2026-10-14'].map(entry_date => ({ goal_id: 'goal', entry_date, amount: 4 }))
+assert.equal(recurringPeriods(weekly, weeklyLogs, '2026-10-19')[0].missed, 2, 'weekly fine is per missing qualifying day')
+assert.equal(recurringFines(weekly, weeklyLogs, [], '2026-10-19').length, 2)
+assert.deepEqual(recurringFines({ ...weekly, weekly_target: 4 }, weeklyLogs, [{ goal_id: 'goal', period_start: '2026-10-12', occurrence_index: 2 }], '2026-10-19').map(fine => fine.paid), [true], 'late progress keeps an already paid occurrence settled')
+assert.equal(recurringPeriods({ ...weekly, start_date: '2026-10-16' }, [], '2026-10-19')[0].expected, 3, 'partial weeks cannot require more days than available')
+const monthly = { ...recurring, recurrence_type: 'monthly', start_date: '2026-01-20', deadline: '2026-03-10', target_value: 10 }
+assert.deepEqual(recurringPeriods(monthly, [{ goal_id: 'goal', entry_date: '2026-01-30', amount: 10 }], '2026-03-05').map(p => [p.start, p.end, p.missed]), [['2026-01-20', '2026-01-31', 0], ['2026-02-01', '2026-02-28', 1], ['2026-03-01', '2026-03-10', 0]])
+const yearly = { ...recurring, recurrence_type: 'yearly', start_date: '2024-02-29', deadline: '2026-03-01' }
+assert.deepEqual(recurringPeriods(yearly, [], '2026-10-19').map(p => p.end), ['2024-12-31', '2025-12-31', '2026-03-01'])
+console.log('Business rules passed: deadline, progress, recurrence periods and fines, approval quorum')
