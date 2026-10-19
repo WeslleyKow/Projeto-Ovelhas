@@ -12,7 +12,11 @@ export type GoalChangeRequest = { id: string; goal_id: string; group_id: string;
 export type GoalChangeVote = { request_id: string; user_id: string; approved: boolean; created_at: string }
 export type AppData = { group: Group; members: Member[]; goals: Goal[]; entries: Entry[]; finePayments: RecurringFinePayment[]; requests: GoalChangeRequest[]; votes: GoalChangeVote[]; me: string }
 export const colors = ['#b2c69d','#c4b9e8','#f2c5a8','#9dc7c4','#e2c5d1','#d8ce9c']
-export const today = () => new Date().toLocaleDateString('en-CA')
+export const today = () => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const part = (name: string) => parts.find(item => item.type === name)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
 export const formatDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 export const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const initials = (name: string) => name.split(' ').filter(Boolean).slice(0,2).map(part => part[0].toUpperCase()).join('')
