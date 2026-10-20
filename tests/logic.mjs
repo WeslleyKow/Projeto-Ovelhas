@@ -60,6 +60,13 @@ assert.equal(isScheduledDay(weekdaysGoal, '2026-10-16'), true)
 assert.equal(isScheduledDay(weekdaysGoal, '2026-10-17'), false)
 assert.deepEqual(recurringPeriods(weekdaysGoal, weekdayLogs, '2026-10-19').map(p => [p.expected, p.achieved, p.missed]), [[5, 4, 1]], 'weekends do not replace a required weekday')
 assert.equal(recurringFines(weekdaysGoal, weekdayLogs, [], '2026-10-19').length, 1)
+const dailyWithRest = { ...recurring, start_date: '2026-10-19', deadline: '2026-10-25', target_value: 1, weekday_mask: 31, rest_dates: ['2026-10-21'] }
+assert.equal(isScheduledDay(dailyWithRest, '2026-10-21'), false, 'one-off holiday is skipped')
+assert.equal(isScheduledDay(dailyWithRest, '2026-10-24'), false, 'regular Saturday rest is skipped')
+assert.equal(isScheduledDay(dailyWithRest, '2026-10-22'), true, 'other weekdays remain active')
+assert.deepEqual(recurringPeriods(dailyWithRest, [{ goal_id: 'goal', entry_date: '2026-10-19', amount: 1 }], '2026-10-26').map(p => [p.start, p.missed]), [['2026-10-19', 0], ['2026-10-20', 1], ['2026-10-22', 1], ['2026-10-23', 1]], 'daily evaluation skips rest days but keeps a separate fine for every missed active day')
+assert.equal(recurringFines(dailyWithRest, [{ goal_id: 'goal', entry_date: '2026-10-19', amount: 1 }], [], '2026-10-26').length, 3)
+assert.deepEqual(recurringPeriods({ ...dailyWithRest, weekday_mask: null }, [], '2026-10-26').map(p => p.start), ['2026-10-19', '2026-10-20', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'], 'one-off holiday also works when every weekday is normally active')
 assert.deepEqual(recurringPeriods({ ...weekdaysGoal, start_date: '2026-10-15' }, [], '2026-10-19').map(p => [p.expected, p.missed]), [[2, 2]], 'partial weeks only require scheduled days inside the goal range')
 assert.equal(recurringPeriods({ ...weekly, target_value: 1 }, weekdayLogs, '2026-10-19')[0].achieved, 5, 'existing flexible weekly goals still accept any days')
 const monthly = { ...recurring, recurrence_type: 'monthly', start_date: '2026-01-20', deadline: '2026-03-10', target_value: 10 }

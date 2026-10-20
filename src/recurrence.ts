@@ -9,7 +9,11 @@ const addDays = (value: string, days: number) => { const next = date(value); nex
 const daysBetween = (first: string, last: string) => Math.round((date(last).getTime() - date(first).getTime()) / 86400000) + 1
 export const weekdayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const weekdayIndex = (value: string) => (date(value).getDay() + 6) % 7
-export const isScheduledDay = (goal: Goal, value: string) => goal.recurrence_type !== 'weekly' || goal.weekday_mask == null || Boolean(goal.weekday_mask & (1 << weekdayIndex(value)))
+export const isScheduledDay = (goal: Goal, value: string) => {
+  if (goal.recurrence_type !== 'daily' && goal.recurrence_type !== 'weekly') return true
+  if (goal.rest_dates?.includes(value)) return false
+  return goal.weekday_mask == null || Boolean(goal.weekday_mask & (1 << weekdayIndex(value)))
+}
 export const selectedWeekdayCount = (mask: number) => weekdayNames.filter((_, index) => Boolean(mask & (1 << index))).length
 const scheduledDaysBetween = (start: string, end: string, mask: number) => {
   let count = 0
@@ -33,7 +37,7 @@ const nextPeriod = (value: string, type: Goal['recurrence_type']) => {
 }
 
 export function recurrenceLabel(goal: Goal) {
-  if (goal.recurrence_type === 'daily') return 'Todos os dias'
+  if (goal.recurrence_type === 'daily') return goal.weekday_mask == null ? 'Todos os dias' : `${weekdayNames.filter((_, index) => Boolean(goal.weekday_mask! & (1 << index))).join(', ')} · avaliação diária`
   if (goal.recurrence_type === 'weekly') return goal.weekday_mask == null ? `${goal.weekly_target} ${goal.weekly_target === 1 ? 'dia' : 'dias'} por semana` : `${weekdayNames.filter((_, index) => Boolean(goal.weekday_mask! & (1 << index))).join(', ')} · ${goal.weekly_target} ${goal.weekly_target === 1 ? 'dia' : 'dias'} por semana`
   if (goal.recurrence_type === 'monthly') return 'Todo mês'
   if (goal.recurrence_type === 'yearly') return 'Todo ano'
@@ -49,7 +53,7 @@ export function recurringPeriods(goal: Goal, entries: Entry[], asOf: string): Re
     const naturalEnd = addDays(nextPeriod(cursor, goal.recurrence_type), -1)
     const end = naturalEnd < goal.deadline ? naturalEnd : goal.deadline
     const logs = relevant.filter(entry => entry.entry_date >= start && entry.entry_date <= end)
-    const expected = goal.recurrence_type === 'weekly' ? goal.weekday_mask == null ? Math.min(goal.weekly_target ?? 1, daysBetween(start, end)) : scheduledDaysBetween(start, end, goal.weekday_mask) : 1
+    const expected = goal.recurrence_type === 'weekly' ? goal.weekday_mask == null ? Math.min(goal.weekly_target ?? 1, daysBetween(start, end)) : scheduledDaysBetween(start, end, goal.weekday_mask) : goal.recurrence_type === 'daily' && !isScheduledDay(goal, start) ? 0 : 1
     if (expected === 0) continue
     let achieved: number
     let recorded: number

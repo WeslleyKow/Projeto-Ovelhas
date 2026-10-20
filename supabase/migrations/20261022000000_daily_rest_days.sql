@@ -1,0 +1,244 @@
+-- Folgas semanais e pontuais mantêm a avaliação diária em cada dia ativo.
+alter table public.goals drop constraint goal_weekday_mask_check;
+alter table public.goals add constraint goal_weekday_mask_check check (
+  weekday_mask is null or (recurrence_type in ('daily','weekly') and weekday_mask between 1 and 127
+    and (recurrence_type = 'daily' or bit_count(weekday_mask::bit(7)) = weekly_target))
+);
+alter table public.goals add column rest_dates date[] not null default '{}'::date[];
+alter table public.goals add constraint goal_rest_dates_check check (
+  cardinality(rest_dates) <= 366 and
+  (recurrence_type = 'daily' or cardinality(rest_dates) = 0)
+);
+
+-- Datas novas precisam ser atuais ou futuras; datas já aprovadas podem ser mantidas.
+create function public.valid_rest_date_change(proposed jsonb, old_dates date[]) returns boolean
+language plpgsql stable set search_path = '' as $$
+declare item text; day date; seen date[] := '{}'::date[]; start_day date; end_day date;
+begin
+  if not (proposed ? 'rest_dates') then return true; end if;
+  if jsonb_typeof(proposed->'rest_dates') <> 'array' or jsonb_array_length(proposed->'rest_dates') > 366 then return false; end if;
+  begin
+    start_day := (proposed->>'start_date')::date;
+    end_day := (proposed->>'deadline')::date;
+    for item in select jsonb_array_elements_text(proposed->'rest_dates') loop
+      day := item::date;
+      if day is null or day < start_day or day > end_day or day = any(seen) or
+        (day < (now() at time zone 'America/Sao_Paulo')::date and not day = any(old_dates)) then return false; end if;
+      seen := array_append(seen, day);
+    end loop;
+  exception when invalid_datetime_format or datetime_field_overflow then return false;
+  end;
+  return cardinality(seen) = 0 or proposed->>'recurrence_type' = 'daily';
+end;
+$$;
+revoke all on function public.valid_rest_date_change(jsonb, date[]) from public, anon, authenticated;
+grant execute on function public.valid_rest_date_change(jsonb, date[]) to authenticated;
+
+-- Na criação, também não podem ser incluídas folgas vencidas ou fora do objetivo.
+drop policy "create own goal" on public.goals;
+create policy "create own goal" on public.goals for insert to authenticated
+with check (owner_id = (select auth.uid()) and deleted_at is null and fine_paid_at is null
+  and public.is_group_member(group_id)
+  and public.valid_rest_date_change(jsonb_build_object(
+    'rest_dates', to_jsonb(rest_dates), 'start_date', start_date,
+    'deadline', deadline, 'recurrence_type', recurrence_type
+  ), '{}'::date[]));
+
+create or replace function public.recurring_missed_count(target_goal uuid, target_period date) returns smallint
+language plpgsql security definer set search_path = '' as $$
+declare
+  g public.goals%rowtype;
+  natural_start date;
+  natural_end date;
+  period_start date;
+  period_end date;
+  expected integer;
+  achieved integer;
+begin
+  select * into g from public.goals where id = target_goal and deleted_at is null;
+  if not found or g.recurrence_type = 'none' or target_period is null then return 0; end if;
+  natural_start := case g.recurrence_type
+    when 'daily' then target_period
+    when 'weekly' then date_trunc('week', target_period)::date
+    when 'monthly' then date_trunc('month', target_period)::date
+    else date_trunc('year', target_period)::date end;
+  natural_end := case g.recurrence_type
+    when 'daily' then natural_start
+    when 'weekly' then natural_start + 6
+    when 'monthly' then (natural_start + interval '1 month' - interval '1 day')::date
+    else (natural_start + interval '1 year' - interval '1 day')::date end;
+  period_start := greatest(g.start_date, natural_start);
+  period_end := least(g.deadline, natural_end);
+  if target_period <> period_start or period_start > period_end or
+    period_end >= (now() at time zone 'America/Sao_Paulo')::date then return 0; end if;
+  if g.recurrence_type = 'daily' and (
+    target_period = any(g.rest_dates) or
+    (g.weekday_mask is not null and (g.weekday_mask & (1 << (extract(isodow from target_period)::integer - 1))) = 0)
+  ) then return 0; end if;
+  if g.recurrence_type = 'weekly' then
+    if g.weekday_mask is null then
+      expected := least(g.weekly_target, period_end - period_start + 1);
+    else
+      select count(*) into expected from generate_series(period_start, period_end, interval '1 day') as dates(day)
+      where (g.weekday_mask & (1 << (extract(isodow from dates.day)::integer - 1))) <> 0;
+    end if;
+    select count(*) into achieved from (
+      select e.entry_date from public.entries e
+      where e.goal_id = g.id and e.entry_date between period_start and period_end
+        and (g.weekday_mask is null or (g.weekday_mask & (1 << (extract(isodow from e.entry_date)::integer - 1))) <> 0)
+      group by e.entry_date having sum(e.amount) >= g.target_value
+    ) achieved_days;
+  else
+    expected := 1;
+    select case when coalesce(sum(e.amount), 0) >= g.target_value then 1 else 0 end into achieved
+    from public.entries e where e.goal_id = g.id and e.entry_date between period_start and period_end;
+  end if;
+  return greatest(0, expected - achieved)::smallint;
+end;
+$$;
+revoke all on function public.recurring_missed_count(uuid, date) from public, anon, authenticated;
+
+create or replace function public.apply_goal_change(target_request uuid) returns void
+language plpgsql security definer set search_path = '' as $$
+declare r public.goal_change_requests%rowtype;
+begin
+  select * into strict r from public.goal_change_requests where id = target_request;
+  if r.action = 'delete' then
+    update public.goals set deleted_at = now() where id = r.goal_id and deleted_at is null;
+  else
+    update public.goals set
+      title = trim(r.proposed->>'title'),
+      description = coalesce(r.proposed->>'description', ''),
+      category = r.proposed->>'category',
+      target_value = (r.proposed->>'target_value')::numeric,
+      weekly_target = (r.proposed->>'weekly_target')::smallint,
+      unit = trim(r.proposed->>'unit'),
+      deadline = (r.proposed->>'deadline')::date,
+      fine_amount = (r.proposed->>'fine_amount')::numeric,
+      recurrence_type = coalesce(r.proposed->>'recurrence_type', recurrence_type),
+      start_date = case when r.proposed ? 'start_date' then (r.proposed->>'start_date')::date else start_date end,
+      weekday_mask = (r.proposed->>'weekday_mask')::integer,
+      rest_dates = case when r.proposed ? 'rest_dates' then
+        array(select item::date from jsonb_array_elements_text(r.proposed->'rest_dates') as days(item))
+        else rest_dates end
+    where id = r.goal_id and deleted_at is null;
+  end if;
+  if not found then raise exception 'O objetivo não está mais disponível.'; end if;
+end;
+$$;
+revoke all on function public.apply_goal_change(uuid) from public, anon, authenticated;
+
+create or replace function public.request_goal_change(target_goal uuid, change_action text, proposed_goal jsonb default null) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare
+  g public.goals%rowtype;
+  family public.groups%rowtype;
+  voters uuid[];
+  needed smallint;
+  new_request uuid;
+begin
+  if auth.uid() is null then raise exception 'Faça login para solicitar a mudança.'; end if;
+  select * into g from public.goals where id = target_goal and deleted_at is null for update;
+  if not found or g.owner_id <> auth.uid() or not public.is_group_member(g.group_id) then
+    raise exception 'Somente o criador pode solicitar mudanças neste objetivo.';
+  end if;
+  select * into strict family from public.groups where id = g.group_id;
+  if change_action not in ('edit', 'delete') then raise exception 'Ação inválida.'; end if;
+  if exists (select 1 from public.goal_change_requests where goal_id = g.id and status = 'pending') then
+    raise exception 'Já existe um pedido pendente para este objetivo.';
+  end if;
+  select coalesce(array_agg(user_id order by user_id), array[]::uuid[]) into voters
+    from public.group_members where group_id = g.group_id and user_id <> g.owner_id;
+  if family.approval_mode = 'count' and family.approval_value > cardinality(voters) and cardinality(voters) > 0 then
+    raise exception 'A regra exige mais aprovações do que participantes disponíveis.';
+  end if;
+  needed := case when cardinality(voters) = 0 then 0
+    when family.approval_mode = 'percent' then ceil(cardinality(voters) * family.approval_value / 100.0)::smallint
+    else family.approval_value end;
+  if change_action = 'edit' then
+    if g.deadline < (now() at time zone 'America/Sao_Paulo')::date then raise exception 'O prazo do objetivo já terminou.'; end if;
+    if proposed_goal is null or jsonb_typeof(proposed_goal) <> 'object' or
+      not (proposed_goal ?& array['title','description','category','target_value','unit','deadline','fine_amount','recurrence_type','start_date']) or
+      exists (select 1 from jsonb_object_keys(proposed_goal) as fields(name) where name <> all(array['title','description','category','target_value','weekly_target','unit','deadline','fine_amount','recurrence_type','start_date','weekday_mask','rest_dates']))
+    then raise exception 'Dados da alteração incompletos ou inválidos.'; end if;
+    if proposed_goal->>'title' is null or proposed_goal->>'unit' is null or
+      proposed_goal->>'category' is null or proposed_goal->>'deadline' is null or
+      proposed_goal->>'target_value' is null or proposed_goal->>'fine_amount' is null or
+      char_length(trim(proposed_goal->>'title')) not between 1 and 100 or
+      char_length(coalesce(proposed_goal->>'description', '')) > 500 or
+      char_length(trim(proposed_goal->>'unit')) not between 1 and 30 or
+      nullif(trim(proposed_goal->>'category'), '') is null or
+      (proposed_goal->>'deadline')::date < (now() at time zone 'America/Sao_Paulo')::date or
+      (proposed_goal->>'target_value')::numeric <= 0 or (proposed_goal->>'target_value')::numeric >= 10000000000 or
+      (proposed_goal->>'fine_amount')::numeric < 0 or (proposed_goal->>'fine_amount')::numeric >= 10000000000 or
+      ((proposed_goal->>'weekly_target') is not null and (proposed_goal->>'weekly_target')::smallint not between 1 and 7) or
+      proposed_goal->>'recurrence_type' not in ('none','daily','weekly','monthly','yearly') or
+      (proposed_goal->>'recurrence_type' = 'none' and proposed_goal->>'start_date' is not null) or
+      (proposed_goal->>'recurrence_type' <> 'none' and (
+        proposed_goal->>'start_date' is null or (proposed_goal->>'start_date')::date > (proposed_goal->>'deadline')::date or
+        (proposed_goal->>'recurrence_type' = 'weekly' and proposed_goal->>'weekly_target' is null))) or
+      ((proposed_goal->>'weekday_mask') is not null and (
+        proposed_goal->>'recurrence_type' not in ('daily','weekly') or
+        (proposed_goal->>'weekday_mask')::integer not between 1 and 127 or
+        (proposed_goal->>'recurrence_type' = 'weekly' and
+          bit_count(((proposed_goal->>'weekday_mask')::integer)::bit(7)) <> (proposed_goal->>'weekly_target')::integer))) or
+      not public.valid_rest_date_change(proposed_goal, g.rest_dates)
+    then raise exception 'Revise os campos do objetivo.'; end if;
+  else
+    proposed_goal := null;
+  end if;
+  insert into public.goal_change_requests(goal_id, group_id, owner_id, goal_title, action, proposed, eligible_user_ids, required_approvals)
+  values(g.id, g.group_id, g.owner_id, g.title, change_action, proposed_goal, voters, needed)
+  returning id into new_request;
+  if needed = 0 then
+    perform public.apply_goal_change(new_request);
+    update public.goal_change_requests set status = 'approved', resolved_at = now() where id = new_request;
+  end if;
+  return new_request;
+end;
+$$;
+revoke all on function public.request_goal_change(uuid, text, jsonb) from public, anon;
+grant execute on function public.request_goal_change(uuid, text, jsonb) to authenticated;
+
+create or replace function public.check_goal_update() returns trigger language plpgsql set search_path = '' as $$
+declare achieved numeric;
+begin
+  if new.group_id is distinct from old.group_id or new.owner_id is distinct from old.owner_id then
+    raise exception 'Não é possível transferir o objetivo.';
+  end if;
+  if old.deadline < current_date and (
+    new.title is distinct from old.title or new.description is distinct from old.description or
+    new.category is distinct from old.category or new.target_value is distinct from old.target_value or
+    new.weekly_target is distinct from old.weekly_target or new.weekday_mask is distinct from old.weekday_mask or new.rest_dates is distinct from old.rest_dates or new.unit is distinct from old.unit or
+    new.deadline is distinct from old.deadline or new.fine_amount is distinct from old.fine_amount or
+    new.recurrence_type is distinct from old.recurrence_type or new.start_date is distinct from old.start_date
+  ) then raise exception 'O objetivo encerrado não pode ser editado.'; end if;
+  if old.deadline >= current_date and new.deadline < current_date then
+    raise exception 'A nova data final precisa ser hoje ou futura.';
+  end if;
+  if new.fine_paid_at is distinct from old.fine_paid_at then
+    if old.recurrence_type <> 'none' then raise exception 'Use os pagamentos de cada ocorrência.'; end if;
+    select coalesce(sum(amount), 0) into achieved from public.entries
+    where goal_id = old.id and entry_date <= old.deadline;
+    if old.deadline >= current_date or achieved >= old.target_value then
+      raise exception 'Não há multa vencida para este objetivo.';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+-- Só os dias ativos podem receber registros; não é possível registrar retroativamente.
+drop policy "log own goal" on public.entries;
+create policy "log own goal" on public.entries for insert to authenticated
+with check (author_id = (select auth.uid()) and exists (
+  select 1 from public.goals g where g.id = goal_id and g.deleted_at is null
+    and g.owner_id = (select auth.uid()) and public.is_group_member(g.group_id)
+    and entry_date <= g.deadline and (g.start_date is null or entry_date >= g.start_date)
+    and (g.recurrence_type = 'none' or entry_date = (now() at time zone 'America/Sao_Paulo')::date)
+    and (g.recurrence_type not in ('daily','weekly') or g.weekday_mask is null or
+      (g.weekday_mask & (1 << (extract(isodow from entry_date)::integer - 1))) <> 0)
+    and (g.recurrence_type <> 'daily' or not entry_date = any(g.rest_dates))
+) and (photo_path is null or photo_path like (
+  (select g.group_id::text from public.goals g where g.id = goal_id) || '/' || (select auth.uid())::text || '/%'
+)));
+notify pgrst, 'reload schema';
