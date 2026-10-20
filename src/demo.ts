@@ -32,7 +32,7 @@ export function loadDemo(): AppData {
     const saved = localStorage.getItem('juntos-demo')
     if (!saved) return base
     const parsed = JSON.parse(saved) as AppData
-    return { ...parsed, group: { ...parsed.group, created_by: parsed.group.created_by ?? 'm1', approval_mode: parsed.group.approval_mode ?? 'percent', approval_value: parsed.group.approval_value ?? 50, pix_qr_path: parsed.group.pix_qr_path ?? null }, requests: parsed.requests ?? [], votes: parsed.votes ?? [], finePayments: parsed.finePayments ?? [], goals: parsed.goals.map(goal => ({ ...goal, weekly_target: goal.weekly_target ?? null, recurrence_type: goal.recurrence_type ?? 'none', start_date: goal.start_date ?? null, fine_paid_at: goal.fine_paid_at ?? null, deleted_at: goal.deleted_at ?? null })) }
+    return { ...parsed, group: { ...parsed.group, created_by: parsed.group.created_by ?? 'm1', approval_mode: parsed.group.approval_mode ?? 'percent', approval_value: parsed.group.approval_value ?? 50, pix_qr_path: parsed.group.pix_qr_path ?? null }, requests: parsed.requests ?? [], votes: parsed.votes ?? [], finePayments: parsed.finePayments ?? [], goals: parsed.goals.map(goal => ({ ...goal, weekly_target: goal.weekly_target ?? null, weekday_mask: goal.weekday_mask ?? null, recurrence_type: goal.recurrence_type ?? 'none', start_date: goal.start_date ?? null, fine_paid_at: goal.fine_paid_at ?? null, deleted_at: goal.deleted_at ?? null })) }
   } catch { return base }
 }
 export function saveDemo(data: AppData) { localStorage.setItem('juntos-demo', JSON.stringify(data)) }

@@ -6,7 +6,7 @@ async function loadModule(path) {
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
 }
 const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
-const { recurringPeriods, recurringProgress, recurringFines } = await loadModule('../src/recurrence.ts')
+const { recurringPeriods, recurringProgress, recurringFines, isScheduledDay, selectedWeekdayCount } = await loadModule('../src/recurrence.ts')
 const { achievementStats, goalIsConcluded, goalHasFailed, rankForPoints, displayedRank, ranks } = await loadModule('../src/achievements.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
@@ -53,6 +53,15 @@ assert.deepEqual(recurringProgress(sodaGoal, sodaFreeDays, '2026-10-19'), {
 assert.equal(recurringFines(sodaGoal, sodaFreeDays, [], '2026-10-19').length, 0)
 assert.deepEqual(recurringFines({ ...weekly, weekly_target: 4 }, weeklyLogs, [{ goal_id: 'goal', period_start: '2026-10-12', occurrence_index: 2 }], '2026-10-19').map(fine => fine.paid), [true], 'late progress keeps an already paid occurrence settled')
 assert.equal(recurringPeriods({ ...weekly, start_date: '2026-10-16' }, [], '2026-10-19')[0].expected, 3, 'partial weeks cannot require more days than available')
+const weekdaysGoal = { ...weekly, target_value: 1, weekday_mask: 31, weekly_target: 5 }
+const weekdayLogs = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-17'].map(entry_date => ({ goal_id: 'goal', entry_date, amount: 1 }))
+assert.equal(selectedWeekdayCount(31), 5)
+assert.equal(isScheduledDay(weekdaysGoal, '2026-10-16'), true)
+assert.equal(isScheduledDay(weekdaysGoal, '2026-10-17'), false)
+assert.deepEqual(recurringPeriods(weekdaysGoal, weekdayLogs, '2026-10-19').map(p => [p.expected, p.achieved, p.missed]), [[5, 4, 1]], 'weekends do not replace a required weekday')
+assert.equal(recurringFines(weekdaysGoal, weekdayLogs, [], '2026-10-19').length, 1)
+assert.deepEqual(recurringPeriods({ ...weekdaysGoal, start_date: '2026-10-15' }, [], '2026-10-19').map(p => [p.expected, p.missed]), [[2, 2]], 'partial weeks only require scheduled days inside the goal range')
+assert.equal(recurringPeriods({ ...weekly, target_value: 1 }, weekdayLogs, '2026-10-19')[0].achieved, 5, 'existing flexible weekly goals still accept any days')
 const monthly = { ...recurring, recurrence_type: 'monthly', start_date: '2026-01-20', deadline: '2026-03-10', target_value: 10 }
 assert.deepEqual(recurringPeriods(monthly, [{ goal_id: 'goal', entry_date: '2026-01-30', amount: 10 }], '2026-03-05').map(p => [p.start, p.end, p.missed]), [['2026-01-20', '2026-01-31', 0], ['2026-02-01', '2026-02-28', 1], ['2026-03-01', '2026-03-10', 0]])
 const yearly = { ...recurring, recurrence_type: 'yearly', start_date: '2024-02-29', deadline: '2026-03-01' }
