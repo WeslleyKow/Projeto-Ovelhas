@@ -1,6 +1,6 @@
 import type { Entry, Goal, RecurringFinePayment } from './types'
 
-export type RecurringPeriod = { start: string; end: string; expected: number; achieved: number; closed: boolean; missed: number }
+export type RecurringPeriod = { start: string; end: string; expected: number; achieved: number; recorded: number; closed: boolean; missed: number }
 export type RecurringFine = { periodStart: string; occurrenceIndex: number; label: string; paid: boolean }
 
 const date = (value: string) => new Date(`${value}T12:00:00`)
@@ -42,15 +42,18 @@ export function recurringPeriods(goal: Goal, entries: Entry[], asOf: string): Re
     const logs = relevant.filter(entry => entry.entry_date >= start && entry.entry_date <= end)
     const expected = goal.recurrence_type === 'weekly' ? Math.min(goal.weekly_target ?? 1, daysBetween(start, end)) : 1
     let achieved: number
+    let recorded: number
     if (goal.recurrence_type === 'weekly') {
       const totals = new Map<string, number>()
       for (const entry of logs) totals.set(entry.entry_date, (totals.get(entry.entry_date) ?? 0) + Number(entry.amount))
-      achieved = Math.min(expected, [...totals.values()].filter(total => total >= Number(goal.target_value)).length)
+      recorded = [...totals.values()].filter(total => total >= Number(goal.target_value)).length
+      achieved = Math.min(expected, recorded)
     } else {
       achieved = Math.min(expected, Math.floor(logs.reduce((sum, entry) => sum + Number(entry.amount), 0) / Number(goal.target_value)))
+      recorded = achieved
     }
     const closed = end < asOf
-    periods.push({ start, end, expected, achieved, closed, missed: closed ? expected - achieved : 0 })
+    periods.push({ start, end, expected, achieved, recorded, closed, missed: closed ? expected - achieved : 0 })
   }
   return periods
 }
@@ -59,7 +62,8 @@ export function recurringProgress(goal: Goal, entries: Entry[], asOf: string) {
   const periods = recurringPeriods(goal, entries, asOf)
   const expected = periods.reduce((sum, period) => sum + period.expected, 0)
   const achieved = periods.reduce((sum, period) => sum + period.achieved, 0)
-  return { periods, expected, achieved, percent: expected ? Math.floor(achieved / expected * 100) : 0 }
+  const recorded = periods.reduce((sum, period) => sum + period.recorded, 0)
+  return { periods, expected, achieved, recorded, percent: expected ? Math.floor(achieved / expected * 100) : 0 }
 }
 
 export function recurringFines(goal: Goal, entries: Entry[], payments: RecurringFinePayment[], asOf: string): RecurringFine[] {

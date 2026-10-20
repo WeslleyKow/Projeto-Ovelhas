@@ -7,7 +7,7 @@ async function loadModule(path) {
 }
 const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
 const { recurringPeriods, recurringProgress, recurringFines } = await loadModule('../src/recurrence.ts')
-const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
 const logs = [
@@ -20,7 +20,7 @@ assert.equal(fineIsDue(goal, logs), true)
 assert.equal(unpaidFine(goal, logs), true)
 assert.equal(unpaidFine({ ...goal, fine_paid_at: new Date().toISOString() }, logs), false)
 assert.equal(progress({ ...goal, target_value: 99.5 }, logs), 100)
-const future = new Date(); future.setDate(future.getDate() + 7)
+const future = new Date(`${today()}T12:00:00`); future.setDate(future.getDate() + 7)
 const currentGoal = { ...goal, deadline: future.toLocaleDateString('en-CA') }
 assert.equal(weekCount(currentGoal, [
   { goal_id: 'goal', entry_date: today(), amount: 1 },
@@ -43,6 +43,13 @@ const weekly = { ...recurring, recurrence_type: 'weekly', start_date: '2026-10-1
 const weeklyLogs = ['2026-10-12', '2026-10-13', '2026-10-14'].map(entry_date => ({ goal_id: 'goal', entry_date, amount: 4 }))
 assert.equal(recurringPeriods(weekly, weeklyLogs, '2026-10-19')[0].missed, 2, 'weekly fine is per missing qualifying day')
 assert.equal(recurringFines(weekly, weeklyLogs, [], '2026-10-19').length, 2)
+const sodaGoal = { ...weekly, weekly_target: 2, target_value: 1 }
+const sodaFreeDays = ['2026-10-12', '2026-10-13', '2026-10-14'].map(entry_date => ({ goal_id: 'goal', entry_date, amount: 1 }))
+assert.deepEqual(recurringProgress(sodaGoal, sodaFreeDays, '2026-10-19'), {
+  periods: [{ start: '2026-10-12', end: '2026-10-18', expected: 2, achieved: 2, recorded: 3, closed: true, missed: 0 }],
+  expected: 2, achieved: 2, recorded: 3, percent: 100
+}, 'extra soda-free days remain visible while weekly progress and fines use the minimum')
+assert.equal(recurringFines(sodaGoal, sodaFreeDays, [], '2026-10-19').length, 0)
 assert.deepEqual(recurringFines({ ...weekly, weekly_target: 4 }, weeklyLogs, [{ goal_id: 'goal', period_start: '2026-10-12', occurrence_index: 2 }], '2026-10-19').map(fine => fine.paid), [true], 'late progress keeps an already paid occurrence settled')
 assert.equal(recurringPeriods({ ...weekly, start_date: '2026-10-16' }, [], '2026-10-19')[0].expected, 3, 'partial weeks cannot require more days than available')
 const monthly = { ...recurring, recurrence_type: 'monthly', start_date: '2026-01-20', deadline: '2026-03-10', target_value: 10 }
