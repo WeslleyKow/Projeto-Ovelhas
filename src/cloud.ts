@@ -13,7 +13,7 @@ export async function fetchData(userId: string): Promise<AppData | null> {
   const groupId = memberships[0].group_id as string
   const [groupResult, membersResult, goalsResult, entriesResult, requestsResult, finesResult] = await Promise.all([
     supabase.from('groups').select('*').eq('id', groupId).single(),
-    supabase.from('group_members').select('user_id, profiles(display_name)').eq('group_id', groupId),
+    supabase.from('group_members').select('user_id, profiles(display_name, selected_rank)').eq('group_id', groupId),
     supabase.from('goals').select('*').eq('group_id', groupId).order('created_at', { ascending: false }),
     supabase.from('entries').select('*, goals!inner(group_id)').eq('goals.group_id', groupId).order('entry_date', { ascending: false }),
     supabase.from('goal_change_requests').select('*').eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: false }),
@@ -23,13 +23,18 @@ export async function fetchData(userId: string): Promise<AppData | null> {
   const requests = (requestsResult.data ?? []) as GoalChangeRequest[]
   const votesResult = requests.length ? await supabase.from('goal_change_votes').select('*').in('request_id', requests.map(request => request.id)) : null
   if (votesResult?.error) throw votesResult.error
-  const members: Member[] = (membersResult.data ?? []).map((row, i) => ({ id: row.user_id, name: (row.profiles as unknown as {display_name: string} | null)?.display_name ?? 'Participante', color: colors[i % colors.length] }))
+  const members: Member[] = (membersResult.data ?? []).map((row, i) => ({ id: row.user_id, name: (row.profiles as unknown as {display_name: string; selected_rank: string | null} | null)?.display_name ?? 'Participante', selected_rank: (row.profiles as unknown as {display_name: string; selected_rank: string | null} | null)?.selected_rank ?? null, color: colors[i % colors.length] }))
   const entries: Entry[] = (entriesResult.data ?? []).map(row => ({ id: row.id, goal_id: row.goal_id, author_id: row.author_id, entry_date: row.entry_date, amount: Number(row.amount), note: row.note, photo_path: row.photo_path, created_at: row.created_at }))
   return { group: groupResult.data as Group, members, goals: goalsResult.data as Goal[], entries, finePayments: (finesResult.data ?? []) as RecurringFinePayment[], requests, votes: (votesResult?.data ?? []) as GoalChangeVote[], me: userId }
 }
 export async function createGroup(name: string) {
   if (!supabase) return
   const { error } = await supabase.rpc('create_family_group', { group_name: name.trim() })
+  if (error) throw error
+}
+export async function saveSelectedRank(userId: string, rankName: string) {
+  if (!supabase) return
+  const { error } = await supabase.from('profiles').update({ selected_rank: rankName }).eq('id', userId)
   if (error) throw error
 }
 export async function joinGroup(code: string) {

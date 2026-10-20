@@ -1,6 +1,6 @@
 import { recurringFines, recurringPeriods, recurringProgress } from './recurrence'
 
-export type Member = { id: string; name: string; color: string }
+export type Member = { id: string; name: string; color: string; selected_rank?: string | null }
 export type ApprovalMode = 'count' | 'percent'
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly'
 export type Group = { id: string; name: string; invite_code: string; created_by: string; approval_mode: ApprovalMode; approval_value: number; pix_qr_path: string | null }

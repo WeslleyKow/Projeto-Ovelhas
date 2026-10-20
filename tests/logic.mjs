@@ -7,7 +7,7 @@ async function loadModule(path) {
 }
 const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
 const { recurringPeriods, recurringProgress, recurringFines } = await loadModule('../src/recurrence.ts')
-const { achievementStats, goalIsConcluded, rankForPoints } = await loadModule('../src/achievements.ts')
+const { achievementStats, goalIsConcluded, goalHasFailed, rankForPoints, displayedRank, ranks } = await loadModule('../src/achievements.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
@@ -69,9 +69,15 @@ const achievementEntries = [
 ]
 assert.equal(goalIsConcluded(achievementGoals[2], achievementEntries, '2020-01-02'), false, 'recurring goal cannot earn points before its deadline')
 assert.equal(goalIsConcluded(achievementGoals[2], achievementEntries, '2020-01-03'), false, 'missed recurring periods do not earn points')
-const achievementData = { goals: achievementGoals, entries: achievementEntries }
+const achievementData = { goals: achievementGoals.slice(0, 2), entries: achievementEntries, members: [{ id: 'm1', selected_rank: null }] }
 assert.equal(achievementStats(achievementData, 'm1').points, 100, 'only fully completed goals earn points')
 assert.equal(achievementStats(achievementData, 'm1').rank.name, 'Recruta')
 assert.equal(achievementStats({ ...achievementData, entries: [...achievementEntries, { goal_id: 'run', entry_date: '2026-10-20', amount: 1 }] }, 'm1').points, 200)
+assert.equal(goalHasFailed(achievementGoals[2], achievementEntries, '2020-01-03'), true)
+assert.equal(achievementStats({ ...achievementData, goals: achievementGoals }, 'm1').points, 0, 'an expired failed goal removes 100 points once')
+assert.equal(achievementStats({ ...achievementData, goals: achievementGoals }, 'm1').failedGoals.length, 1)
+assert.equal(displayedRank(100, 'Betinha').name, 'Betinha', 'members may wear an unlocked lower rank')
+assert.equal(displayedRank(0, 'Recruta').name, 'Betinha', 'lost points remove access to higher ranks')
+assert.ok(ranks.length >= 20, 'the rank ladder offers many steps')
 assert.equal(rankForPoints(0).name, 'Betinha', 'everyone starts as Betinha')
 console.log('Business rules passed: deadline, progress, recurrence periods and fines, approval quorum')
