@@ -7,6 +7,7 @@ async function loadModule(path) {
 }
 const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
 const { recurringPeriods, recurringProgress, recurringFines } = await loadModule('../src/recurrence.ts')
+const { achievementStats, goalIsConcluded, rankForPoints } = await loadModule('../src/achievements.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
@@ -56,4 +57,21 @@ const monthly = { ...recurring, recurrence_type: 'monthly', start_date: '2026-01
 assert.deepEqual(recurringPeriods(monthly, [{ goal_id: 'goal', entry_date: '2026-01-30', amount: 10 }], '2026-03-05').map(p => [p.start, p.end, p.missed]), [['2026-01-20', '2026-01-31', 0], ['2026-02-01', '2026-02-28', 1], ['2026-03-01', '2026-03-10', 0]])
 const yearly = { ...recurring, recurrence_type: 'yearly', start_date: '2024-02-29', deadline: '2026-03-01' }
 assert.deepEqual(recurringPeriods(yearly, [], '2026-10-19').map(p => p.end), ['2024-12-31', '2025-12-31', '2026-03-01'])
+const achievementGoals = [
+  { id: 'read', owner_id: 'm1', category: 'Leitura', recurrence_type: 'none', target_value: 1, deadline: '2099-12-31' },
+  { id: 'run', owner_id: 'm1', category: 'Saúde', recurrence_type: 'none', target_value: 2, deadline: '2099-12-31' },
+  { id: 'daily', owner_id: 'm1', category: 'Saúde', recurrence_type: 'daily', start_date: '2020-01-01', deadline: '2020-01-02', target_value: 1 }
+]
+const achievementEntries = [
+  { goal_id: 'read', entry_date: '2026-10-19', amount: 1 },
+  { goal_id: 'run', entry_date: '2026-10-19', amount: 1 },
+  { goal_id: 'daily', entry_date: '2020-01-01', amount: 1 }
+]
+assert.equal(goalIsConcluded(achievementGoals[2], achievementEntries, '2020-01-02'), false, 'recurring goal cannot earn points before its deadline')
+assert.equal(goalIsConcluded(achievementGoals[2], achievementEntries, '2020-01-03'), false, 'missed recurring periods do not earn points')
+const achievementData = { goals: achievementGoals, entries: achievementEntries }
+assert.equal(achievementStats(achievementData, 'm1').points, 100, 'only fully completed goals earn points')
+assert.equal(achievementStats(achievementData, 'm1').rank.name, 'Recruta')
+assert.equal(achievementStats({ ...achievementData, entries: [...achievementEntries, { goal_id: 'run', entry_date: '2026-10-20', amount: 1 }] }, 'm1').points, 200)
+assert.equal(rankForPoints(0).name, 'Betinha', 'everyone starts as Betinha')
 console.log('Business rules passed: deadline, progress, recurrence periods and fines, approval quorum')
