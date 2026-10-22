@@ -8,6 +8,7 @@ async function loadModule(path) {
 const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
 const { recurringPeriods, recurringProgress, recurringFines, isScheduledDay, selectedWeekdayCount } = await loadModule('../src/recurrence.ts')
 const { achievementStats, goalIsConcluded, goalHasFailed, rankForPoints, displayedRank, ranks } = await loadModule('../src/achievements.ts')
+const { pendingFines } = await loadModule('../src/fines.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
@@ -52,6 +53,25 @@ assert.deepEqual(recurringProgress(sodaGoal, sodaFreeDays, '2026-10-19'), {
 }, 'extra soda-free days remain visible while weekly progress and fines use the minimum')
 assert.equal(recurringFines(sodaGoal, sodaFreeDays, [], '2026-10-19').length, 0)
 assert.deepEqual(recurringFines({ ...weekly, weekly_target: 4 }, weeklyLogs, [{ goal_id: 'goal', period_start: '2026-10-12', occurrence_index: 2 }], '2026-10-19').map(fine => fine.paid), [true], 'late progress keeps an already paid occurrence settled')
+const fineData = {
+  goals: [
+    { ...goal, id: 'one', owner_id: 'm1', title: 'Livro', unit: 'páginas', target_value: 10, deadline: '2026-10-18', fine_amount: 30, recurrence_type: 'none' },
+    { ...recurring, id: 'daily', owner_id: 'm2', title: 'Água', unit: 'litros', start_date: '2026-10-18', deadline: '2026-10-20', fine_amount: 5 },
+    { ...weekly, id: 'weekly', owner_id: 'm1', title: 'Inglês', unit: 'minutos', start_date: '2026-10-12', deadline: '2026-10-18', weekly_target: 2, target_value: 20, fine_amount: 10 }
+  ],
+  entries: [
+    { goal_id: 'one', entry_date: '2026-10-18', amount: 4 },
+    { goal_id: 'daily', entry_date: '2026-10-18', amount: 4 },
+    { goal_id: 'weekly', entry_date: '2026-10-12', amount: 20 }
+  ],
+  finePayments: [{ goal_id: 'daily', period_start: '2026-10-19', occurrence_index: 1 }]
+}
+const openFines = pendingFines(fineData, '2026-10-21')
+assert.deepEqual(openFines.map(fine => [fine.goal.owner_id, fine.goal.title, fine.amount]), [['m1', 'Inglês', 10], ['m1', 'Livro', 30], ['m2', 'Água', 5]], 'the ledger lists each unpaid fine with its debtor and amount')
+assert.match(openFines[0].reason, /1 de 2 dias exigidos/)
+assert.match(openFines[1].reason, /4 páginas registrados/)
+assert.match(openFines[2].label, /20\/10\/2026/)
+assert.equal(pendingFines({ ...fineData, goals: fineData.goals.map(g => g.id === 'one' ? { ...g, fine_paid_at: '2026-10-21' } : g) }, '2026-10-21').reduce((sum, fine) => sum + fine.amount, 0), 15, 'paid fines leave the pending total')
 assert.equal(recurringPeriods({ ...weekly, start_date: '2026-10-16' }, [], '2026-10-19')[0].expected, 3, 'partial weeks cannot require more days than available')
 const weekdaysGoal = { ...weekly, target_value: 1, weekday_mask: 31, weekly_target: 5 }
 const weekdayLogs = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-17'].map(entry_date => ({ goal_id: 'goal', entry_date, amount: 1 }))
