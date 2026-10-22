@@ -33,8 +33,10 @@ function GoalCard({ goal, data, onClick, onCompleteToday, completingToday, savin
   const unpaid = recurring && goal.fine_amount > 0 ? recurringFines(goal, data.entries, data.finePayments, today()).filter(fine => !fine.paid).length : 0
   const isDone = pct >= 100 && (!recurring || goal.deadline < today())
   const overdue = goal.deadline < today() && !isDone
-  const dailyToday = goal.owner_id === data.me && goal.recurrence_type === 'daily' && !!goal.start_date && goal.start_date <= today() && goal.deadline >= today()
-  const scheduledToday = dailyToday && isScheduledDay(goal, today())
+  const activeToday = goal.owner_id === data.me && !!goal.start_date && goal.start_date <= today() && goal.deadline >= today()
+  const dailyToday = activeToday && goal.recurrence_type === 'daily'
+  const weeklyToday = activeToday && goal.recurrence_type === 'weekly' && isScheduledDay(goal, today())
+  const scheduledToday = (dailyToday || weeklyToday) && isScheduledDay(goal, today())
   const todayAmount = scheduledToday ? data.entries.filter(entry => entry.goal_id === goal.id && entry.entry_date === today()).reduce((sum, entry) => sum + Number(entry.amount), 0) : 0
   const doneToday = scheduledToday && todayAmount >= Number(goal.target_value)
   return <article className="goal-card"><button className="goal-card-open" onClick={onClick} aria-label={`Abrir objetivo ${goal.title}`}>
@@ -42,7 +44,7 @@ function GoalCard({ goal, data, onClick, onCompleteToday, completingToday, savin
     <div className="goal-card-body"><span className="eyebrow">{goal.category}</span><h3>{goal.title}</h3><p>{goal.description || 'Cada passo conta nessa jornada.'}</p></div>
     <div className="goal-card-progress">{recurring ? <div className="weekly-pill"><Flame size={12}/> {recurrenceLabel(goal)}</div> : goal.weekly_target && <div className="weekly-pill"><Flame size={12}/> Esta semana: {weekCount(goal,data.entries)}/{goal.weekly_target} dias</div>}<div className="row spread"><span>Progresso</span><strong>{pct}%</strong></div><ProgressBar value={pct}/><div className="row spread muted tiny"><span>{recurringStatus ? `${goal.recurrence_type === 'weekly' ? recurringStatus.recorded : recurringStatus.achieved} de ${recurringStatus.expected} ocorrências${goal.recurrence_type === 'weekly' && recurringStatus.recorded > recurringStatus.achieved ? ` · +${recurringStatus.recorded - recurringStatus.achieved} extra` : ''}` : `${completed(goal, data.entries)} de ${goal.target_value} ${goal.unit}`}</span><span><CalendarDays size={13}/> {formatDate(goal.deadline)}</span></div></div>
     <div className="goal-card-footer"><div className="row"><Avatar name={owner?.name || '?'} color={owner?.color || '#ccc'} small/><span>{owner?.name || 'Participante'}</span></div><span className="fine">{recurring ? unpaid ? `Pendente ${money(unpaid * Number(goal.fine_amount))}` : `Multa ${money(goal.fine_amount)} cada` : fineIsDue(goal,data.entries) && goal.fine_paid_at ? 'Multa paga' : `Multa ${money(goal.fine_amount)}`}</span></div>
-  </button>{dailyToday && <div className="goal-card-daily-action">{!scheduledToday ? <span className="goal-card-today-rest"><CalendarDays size={15}/> Folga hoje</span> : doneToday ? <span className="goal-card-today-done"><CheckCircle2 size={16}/> Hoje já concluído</span> : <button className="goal-card-complete" disabled={savingToday} onClick={onCompleteToday}><Check size={16}/> {completingToday ? 'Marcando...' : 'Marcar hoje como feito'}</button>}</div>}</article>
+  </button>{dailyToday && <div className="goal-card-daily-action">{!scheduledToday ? <span className="goal-card-today-rest"><CalendarDays size={15}/> Folga hoje</span> : doneToday ? <span className="goal-card-today-done"><CheckCircle2 size={16}/> Hoje já concluído</span> : <button className="goal-card-complete" disabled={savingToday} onClick={onCompleteToday}><Check size={16}/> {completingToday ? 'Marcando...' : 'Marcar hoje como feito'}</button>}</div>}{weeklyToday && todayAmount > 0 && <div className="goal-card-daily-action"><span className="goal-card-weekly-progress"><CheckCircle2 size={16}/> Progresso registrado hoje{todayAmount < Number(goal.target_value) && <small> · {todayAmount}/{goal.target_value} {goal.unit}</small>}</span></div>}</article>
 }
 
 function Auth({ onDemo }: { onDemo: () => void }) {
