@@ -9,6 +9,7 @@ const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, to
 const { recurringPeriods, recurringProgress, recurringFines, isScheduledDay, selectedWeekdayCount } = await loadModule('../src/recurrence.ts')
 const { achievementStats, goalIsConcluded, goalHasFailed, rankForPoints, displayedRank, ranks } = await loadModule('../src/achievements.ts')
 const { pendingFines } = await loadModule('../src/fines.ts')
+const { checkoutRecords } = await loadModule('../src/checkouts.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
 assert.equal(formatEntryTimestamp('2026-10-23T13:45:00Z'), '23/10/2026 às 10:45', 'stored timestamps display in Brasília time')
 assert.equal(formatEntryTimestamp('2026-10-24T01:15:00Z'), '23/10/2026 às 22:15', 'the displayed date follows Brasília across UTC midnight')
@@ -70,6 +71,13 @@ const fineData = {
   finePayments: [{ goal_id: 'daily', period_start: '2026-10-19', occurrence_index: 1 }]
 }
 const openFines = pendingFines(fineData, '2026-10-21')
+const checkoutSample = checkoutRecords({ goals: [{ id: 'water', target_value: 2 }, { id: 'read', target_value: 1 }], entries: [
+  { id: 'a', goal_id: 'water', author_id: 'm1', entry_date: '2026-10-19', created_at: '2026-10-19T13:00:00Z', amount: 1 },
+  { id: 'b', goal_id: 'water', author_id: 'm1', entry_date: '2026-10-19', created_at: '2026-10-19T14:00:00Z', amount: 1 },
+  { id: 'c', goal_id: 'read', author_id: 'm2', entry_date: '2026-10-18', created_at: '2026-10-20T13:00:00Z', amount: 1 },
+  { id: 'orphan', goal_id: 'deleted', author_id: 'm2', entry_date: '2026-10-20', created_at: '2026-10-21T13:00:00Z', amount: 1 }
+] })
+assert.deepEqual(checkoutSample.map(record => [record.entry.id, record.dayTotal]), [['c', 1], ['b', 2], ['a', 2]], 'checkouts list newest registrations first and show the completed day total')
 assert.deepEqual(openFines.map(fine => [fine.goal.owner_id, fine.goal.title, fine.amount]), [['m1', 'Inglês', 10], ['m1', 'Livro', 30], ['m2', 'Água', 5]], 'the ledger lists each unpaid fine with its debtor and amount')
 assert.match(openFines[0].reason, /1 de 2 dias exigidos/)
 assert.match(openFines[1].reason, /4 páginas registrados/)
