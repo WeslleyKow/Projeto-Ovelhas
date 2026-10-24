@@ -5,11 +5,14 @@ async function loadModule(path) {
   const result = await build({ entryPoints: [new URL(path, import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false })
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)
 }
-const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today } = await loadModule('../src/types.ts')
+const { completed, progress, fineIsDue, unpaidFine, weekCount, approvalCount, today, formatEntryTimestamp } = await loadModule('../src/types.ts')
 const { recurringPeriods, recurringProgress, recurringFines, isScheduledDay, selectedWeekdayCount } = await loadModule('../src/recurrence.ts')
 const { achievementStats, goalIsConcluded, goalHasFailed, rankForPoints, displayedRank, ranks } = await loadModule('../src/achievements.ts')
 const { pendingFines } = await loadModule('../src/fines.ts')
 const yesterday = new Date(`${today()}T12:00:00`); yesterday.setDate(yesterday.getDate() - 1)
+assert.equal(formatEntryTimestamp('2026-10-23T13:45:00Z'), '23/10/2026 às 10:45', 'stored timestamps display in Brasília time')
+assert.equal(formatEntryTimestamp('2026-10-24T01:15:00Z'), '23/10/2026 às 22:15', 'the displayed date follows Brasília across UTC midnight')
+assert.equal(formatEntryTimestamp('2026-10-23'), null, 'legacy demo dates without a recorded hour do not invent one')
 const deadline = yesterday.toLocaleDateString('en-CA')
 const goal = { id: 'goal', target_value: 100, deadline, fine_amount: 15, weekly_target: 5, fine_paid_at: null }
 const logs = [

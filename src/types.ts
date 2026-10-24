@@ -18,6 +18,14 @@ export const today = () => {
   return `${part('year')}-${part('month')}-${part('day')}`
 }
 export const formatDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+export const formatEntryTimestamp = (timestamp: string | null | undefined) => {
+  if (!timestamp || !timestamp.includes('T')) return null
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return null
+  const parts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(date)
+  const part = (name: string) => parts.find(item => item.type === name)?.value ?? ''
+  return `${part('day')}/${part('month')}/${part('year')} às ${part('hour')}:${part('minute')}`
+}
 export const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 export const initials = (name: string) => name.split(' ').filter(Boolean).slice(0,2).map(part => part[0].toUpperCase()).join('')
 export const completed = (goal: Goal, entries: Entry[]) => entries.filter(entry => entry.goal_id === goal.id && entry.entry_date <= goal.deadline).reduce((sum, entry) => sum + Number(entry.amount), 0)
