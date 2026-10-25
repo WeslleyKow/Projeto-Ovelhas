@@ -8,9 +8,10 @@ export type GoalProposal = { title: string; description: string; category: strin
 export type Goal = GoalProposal & { id: string; group_id: string; owner_id: string; fine_paid_at?: string | null; deleted_at: string | null; created_at: string }
 export type Entry = { id: string; goal_id: string; author_id: string; entry_date: string; amount: number; note: string; photo_path: string | null; created_at: string }
 export type RecurringFinePayment = { goal_id: string; period_start: string; occurrence_index: number; paid_at: string }
+export type HeartSpend = { id: string; user_id: string; group_id: string; target_date: string; spent_at: string; restores_at: string }
 export type GoalChangeRequest = { id: string; goal_id: string; group_id: string; owner_id: string; goal_title: string; action: 'edit' | 'delete'; proposed: GoalProposal | null; eligible_user_ids: string[]; required_approvals: number; status: 'pending' | 'approved' | 'rejected' | 'cancelled' | 'expired'; created_at: string; resolved_at: string | null }
 export type GoalChangeVote = { request_id: string; user_id: string; approved: boolean; created_at: string }
-export type AppData = { group: Group; members: Member[]; goals: Goal[]; entries: Entry[]; finePayments: RecurringFinePayment[]; requests: GoalChangeRequest[]; votes: GoalChangeVote[]; me: string }
+export type AppData = { group: Group; members: Member[]; goals: Goal[]; entries: Entry[]; finePayments: RecurringFinePayment[]; heartSpends: HeartSpend[]; requests: GoalChangeRequest[]; votes: GoalChangeVote[]; me: string }
 export const colors = ['#b2c69d','#c4b9e8','#f2c5a8','#9dc7c4','#e2c5d1','#d8ce9c']
 export const today = () => {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())

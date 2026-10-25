@@ -19,6 +19,7 @@ const base: AppData = {
   requests: [],
   votes: [],
   finePayments: [],
+  heartSpends: [],
   entries: [
     ...Array.from({length: 12}, (_, i) => ({ id: `e1-${i}`, goal_id: 'g1', author_id: 'm1', entry_date: daysFromNow(-i * 2), amount: 1, note: i === 0 ? 'Treino de pernas concluído! Pequenos passos, grandes mudanças.' : 'Mais um treino feito!', photo_path: null, created_at: daysFromNow(-i * 2) })),
     ...Array.from({length: 18}, (_, i) => ({ id: `e2-${i}`, goal_id: 'g2', author_id: 'm1', entry_date: daysFromNow(-i), amount: 1, note: i === 1 ? 'Consegui entender um vídeo inteiro sem legenda.' : '30 minutos de prática.', photo_path: null, created_at: daysFromNow(-i) })),
@@ -32,7 +33,7 @@ export function loadDemo(): AppData {
     const saved = localStorage.getItem('juntos-demo')
     if (!saved) return base
     const parsed = JSON.parse(saved) as AppData
-    return { ...parsed, group: { ...parsed.group, created_by: parsed.group.created_by ?? 'm1', approval_mode: parsed.group.approval_mode ?? 'percent', approval_value: parsed.group.approval_value ?? 50, pix_qr_path: parsed.group.pix_qr_path ?? null }, requests: parsed.requests ?? [], votes: parsed.votes ?? [], finePayments: parsed.finePayments ?? [], goals: parsed.goals.map(goal => ({ ...goal, weekly_target: goal.weekly_target ?? null, weekday_mask: goal.weekday_mask ?? null, rest_dates: goal.rest_dates ?? [], recurrence_type: goal.recurrence_type ?? 'none', start_date: goal.start_date ?? null, fine_paid_at: goal.fine_paid_at ?? null, deleted_at: goal.deleted_at ?? null })) }
+    return { ...parsed, group: { ...parsed.group, created_by: parsed.group.created_by ?? 'm1', approval_mode: parsed.group.approval_mode ?? 'percent', approval_value: parsed.group.approval_value ?? 50, pix_qr_path: parsed.group.pix_qr_path ?? null }, requests: parsed.requests ?? [], votes: parsed.votes ?? [], finePayments: parsed.finePayments ?? [], heartSpends: parsed.heartSpends ?? [], goals: parsed.goals.map(goal => ({ ...goal, weekly_target: goal.weekly_target ?? null, weekday_mask: goal.weekday_mask ?? null, rest_dates: goal.rest_dates ?? [], recurrence_type: goal.recurrence_type ?? 'none', start_date: goal.start_date ?? null, fine_paid_at: goal.fine_paid_at ?? null, deleted_at: goal.deleted_at ?? null })) }
   } catch { return base }
 }
 export function saveDemo(data: AppData) { localStorage.setItem('juntos-demo', JSON.stringify(data)) }

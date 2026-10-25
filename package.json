@@ -11,7 +11,8 @@
     "smoke": "node tests/smoke.mjs",
     "smoke:approvals": "node tests/approvals.mjs",
     "test": "node tests/logic.mjs",
-    "smoke:recurring": "node tests/recurring.mjs"
+    "smoke:recurring": "node tests/recurring.mjs",
+    "smoke:hearts": "node tests/hearts.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
