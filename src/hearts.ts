@@ -21,7 +21,7 @@ function monthStartInstant(now: Date) {
 export function heartStatus(spends: HeartSpend[], resets: HeartReset[] = [], userId?: string, now = new Date()) {
   const resetAt = Math.max(0, ...resets.filter(reset => !userId || reset.user_id === userId).map(reset => new Date(reset.created_at).getTime()))
   const monthStart = monthStartInstant(now)
-  const active = spends.filter(spend => (!userId || spend.user_id === userId) && new Date(spend.spent_at).getTime() >= monthStart && new Date(spend.spent_at).getTime() > resetAt)
+  const active = spends.filter(spend => !spend.voided_at && (!userId || spend.user_id === userId) && new Date(spend.spent_at).getTime() >= monthStart && new Date(spend.spent_at).getTime() > resetAt)
     .sort((a, b) => a.spent_at.localeCompare(b.spent_at))
   return { available: Math.max(0, HEART_CAPACITY - active.length), active }
 }

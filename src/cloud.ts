@@ -18,7 +18,7 @@ export async function fetchData(userId: string): Promise<AppData | null> {
     supabase.from('entries').select('*, goals!inner(group_id)').eq('goals.group_id', groupId).order('entry_date', { ascending: false }),
     supabase.from('goal_change_requests').select('*').eq('group_id', groupId).eq('status', 'pending').order('created_at', { ascending: false }),
     supabase.from('recurring_fine_payments').select('goal_id,period_start,occurrence_index,paid_at').eq('group_id', groupId),
-    supabase.from('heart_spends').select('id,user_id,group_id,target_date,spent_at,restores_at').eq('user_id', userId),
+    supabase.from('heart_spends').select('id,user_id,group_id,target_date,spent_at,restores_at,voided_at,void_reason').eq('user_id', userId),
     supabase.from('heart_resets').select('id,user_id,group_id,amount,created_at,paid_at').eq('group_id', groupId).order('created_at', { ascending: false })
   ])
   for (const result of [groupResult, membersResult, goalsResult, entriesResult, requestsResult, finesResult, heartsResult, resetsResult]) if (result.error) throw result.error

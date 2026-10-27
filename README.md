@@ -48,6 +48,7 @@ No projeto Supabase, aplique as migrações **na ordem**:
 9. [Folgas em metas diárias](supabase/migrations/20261022000000_daily_rest_days.sql): dias de folga semanais e pontuais, validação de datas e multa diária apenas nos dias ativos. **Já aplicada** ao projeto Projeto-Ovelhas em 20/10/2026.
 10. [Corações para recuperar ontem](supabase/migrations/20261025000000_recovery_hearts.sql): implementação inicial das vidas. **Já aplicada** ao projeto Projeto-Ovelhas em 25/10/2026.
 11. [Vidas mensais e multa de reset](supabase/migrations/20261026000000_monthly_hearts.sql): ontem grátis, datas anteriores com vida, renovação mensal, reset mediante multa configurável. **Já aplicada** ao projeto Projeto-Ovelhas em 26/10/2026 (Brasília).
+12. [Correções auditáveis de vidas](supabase/migrations/20261027000000_heart_spend_corrections.sql): permite anular um gasto sem excluir o histórico da recuperação; gastos anulados não reduzem o saldo mensal. **Já aplicada** ao projeto Projeto-Ovelhas em 26/10/2026 (Brasília).
 
 Configure `VITE_SUPABASE_URL` com a URL base do projeto (por exemplo, `https://SEU-PROJETO.supabase.co`, sem `/rest/v1/`) e `VITE_SUPABASE_ANON_KEY` com a chave pública *publishable* (ou *anon*) no ambiente de desenvolvimento e na hospedagem. O app também remove um sufixo `/rest/v1/` caso a variável já tenha sido preenchida assim. Veja [.env.example](.env.example). **Nunca use `service_role` ou uma chave secreta no site.**
 
